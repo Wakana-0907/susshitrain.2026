@@ -1,0 +1,593 @@
+:root {
+  --paper: #faf6ee;
+  --card: #fffdf8;
+  --ink: #3b3631;
+  --ink-soft: #776d62;
+  --line: #e4d9c7;
+  --sage: #7f9f7a;
+  --sage-wash: #e6eedf;
+  --terra: #c9775a;
+  --terra-wash: #f7e4da;
+  --sky: #7fa6bf;
+  --sky-wash: #e2edf3;
+  --mustard: #d3a443;
+  --mustard-wash: #f7edd2;
+  --r1: 22px 8px 20px 10px / 10px 20px 8px 22px;
+  --r2: 14px 22px 10px 18px / 18px 10px 22px 14px;
+  --r3: 10px 16px 8px 14px / 14px 8px 16px 10px;
+  --shadow: 2px 3px 0 rgba(59, 54, 49, 0.06);
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  min-height: 100vh;
+}
+.wash { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; opacity: 0.75; pointer-events: none; }
+
+h1, h2, h3, .num, .rec-stores { font-family: 'Klee One', 'Zen Maru Gothic', serif; }
+h1 { font-size: 1.45rem; margin: 0; letter-spacing: 0.04em; }
+h2 { font-size: 1.15rem; margin: 0; font-weight: 600; }
+h3 { font-size: 1rem; margin: 0 0 0.6rem; font-weight: 600; }
+p { margin: 0.3rem 0; }
+button { font-family: inherit; color: inherit; cursor: pointer; }
+.muted { color: var(--ink-soft); }
+.small { font-size: 0.8rem; }
+.good { color: #5f8a59; }
+.lead { color: var(--ink-soft); font-size: 0.88rem; margin: 0.2rem 0 1rem; }
+
+/* ---------- header ---------- */
+.top {
+  max-width: 1120px; margin: 0 auto; padding: 22px 16px 8px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.logo { width: 54px; height: 54px; flex: none; }
+.tagline { color: var(--ink-soft); font-size: 0.85rem; margin: 0; }
+.tabs { display: flex; gap: 6px; background: var(--card); border: 1.5px solid var(--line); padding: 5px; border-radius: var(--r2); box-shadow: var(--shadow); }
+.tab { border: 0; background: transparent; padding: 7px 14px; border-radius: var(--r3); font-size: 0.9rem; }
+.tab.is-on { background: var(--ink); color: var(--paper); }
+
+main { max-width: 1120px; margin: 0 auto; padding: 8px 16px 24px; }
+
+.step-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 18px 0 6px; }
+.step {
+  display: inline-grid; place-items: center; width: 26px; height: 26px; margin-right: 8px;
+  background: var(--mustard-wash); border: 1.5px solid var(--mustard); border-radius: 50% 45% 55% 48%;
+  font-size: 0.9rem;
+}
+.link { border: 0; background: none; color: var(--ink-soft); text-decoration: underline; text-underline-offset: 3px; font-size: 0.85rem; }
+
+.btn, .btn-soft {
+  border-radius: var(--r3); padding: 7px 16px; font-size: 0.88rem; border: 1.5px solid var(--ink);
+}
+.btn { background: var(--ink); color: var(--paper); }
+.btn-soft { background: var(--card); }
+.btn-soft:hover { background: var(--mustard-wash); }
+
+/* ---------- layout ---------- */
+.shop-grid { display: grid; grid-template-columns: 1fr; gap: 8px 32px; }
+@media (min-width: 900px) {
+  .shop-grid { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); }
+}
+
+/* ---------- recipes ---------- */
+.recipe-group { margin-bottom: 14px; }
+.tag-title { display: inline-block; font-size: 0.85rem; padding: 0 12px; border-radius: var(--r3); margin-bottom: 8px; }
+.tag-title[data-tag="主菜"] { background: var(--terra-wash); }
+.tag-title[data-tag="主食"] { background: var(--mustard-wash); }
+.tag-title[data-tag="汁物"] { background: var(--sky-wash); }
+.tag-title[data-tag="副菜"] { background: var(--sage-wash); }
+.recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.recipe {
+  display: flex; align-items: center; gap: 10px; justify-content: space-between;
+  background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r1); padding: 10px 12px;
+  box-shadow: var(--shadow); transition: border-color 0.15s;
+}
+.recipe:nth-child(even) { border-radius: var(--r2); }
+.recipe.is-on { border-color: var(--ink); }
+.recipe h4 { margin: 0; font-size: 0.95rem; font-weight: 500; }
+.uses { margin: 2px 0 0; font-size: 0.75rem; color: var(--ink-soft); line-height: 1.5; }
+.stepper { display: flex; align-items: center; gap: 4px; flex: none; }
+.stepper button {
+  width: 28px; height: 28px; border: 1.5px solid var(--ink); background: var(--card);
+  border-radius: 48% 52% 46% 54%; font-size: 1rem; line-height: 1; padding: 0;
+}
+.stepper button:disabled { opacity: 0.3; cursor: default; }
+.stepper .count { min-width: 18px; text-align: center; font-family: 'Klee One', serif; font-weight: 600; }
+
+/* ---------- offers ---------- */
+.offer-card {
+  background: var(--terra-wash); border: 1.5px dashed var(--terra); border-radius: var(--r2);
+  padding: 12px 16px; margin: 6px 0 4px;
+}
+.offer-head { font-family: 'Klee One', serif; font-weight: 600; margin: 0 0 4px; }
+.offer-row + .offer-row { border-top: 1px dashed rgba(201, 119, 90, 0.4); margin-top: 6px; padding-top: 6px; }
+.off { color: var(--terra); font-weight: 700; }
+.offer-recipes { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1.5px solid var(--terra); background: var(--card); border-radius: var(--r3); padding: 2px 10px; font-size: 0.8rem; }
+
+/* ---------- plan ---------- */
+.empty, .done {
+  background: var(--card); border: 1.5px dashed var(--line); border-radius: var(--r2);
+  padding: 22px 16px; text-align: center; color: var(--ink-soft);
+}
+.empty .btn-soft { margin-top: 10px; }
+.done { padding: 12px 16px; text-align: left; background: var(--sage-wash); border-color: var(--sage); color: var(--ink); }
+.rec-card {
+  background: var(--card); border: 2px solid var(--ink); border-radius: var(--r1); padding: 14px 18px; box-shadow: 3px 4px 0 rgba(59, 54, 49, 0.1);
+}
+.rec-label { font-size: 0.8rem; color: var(--ink-soft); margin: 0; }
+.rec-stores { font-size: 1.3rem; font-weight: 600; margin: 2px 0 8px; }
+.rec-figs { display: flex; flex-wrap: wrap; gap: 6px 24px; }
+.rec-figs > div, .kpi { display: flex; flex-direction: column; }
+.big { font-size: 2rem; line-height: 1.2; font-weight: 600; }
+.mid { font-size: 1.4rem; line-height: 1.3; font-weight: 600; }
+.mid small { font-size: 0.8rem; margin-left: 2px; }
+.note { font-size: 0.82rem; color: var(--ink-soft); margin-top: 8px; }
+
+.compare { margin-top: 10px; background: var(--mustard-wash); border-radius: var(--r2); padding: 10px 14px; }
+.compare-title { font-size: 0.85rem; margin: 0 0 6px; }
+.compare-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
+.compare-row > div:not(.arrow) { display: flex; flex-direction: column; }
+.compare-row .num { font-size: 1.2rem; font-weight: 600; }
+.arrow { font-size: 1.3rem; color: var(--ink-soft); }
+
+.options { margin-top: 10px; background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r3); padding: 6px 14px; }
+.options summary { cursor: pointer; font-size: 0.88rem; padding: 4px 0; }
+.opt-list { list-style: none; padding: 0; margin: 6px 0; }
+.opt-list li {
+  display: grid; grid-template-columns: 1fr auto auto; grid-template-areas: "name total time" "h h h";
+  gap: 0 12px; padding: 6px 0; border-top: 1px dashed var(--line); font-size: 0.88rem;
+}
+.opt-name { grid-area: name; }
+.opt-total { grid-area: total; font-weight: 600; }
+.opt-time { grid-area: time; color: var(--ink-soft); }
+.opt-h { grid-area: h; font-size: 0.75rem; color: var(--ink-soft); }
+.opt-h.good { color: #5f8a59; }
+.opt-h.bad { color: var(--terra); }
+.opt-list li.is-rec .opt-name::after { content: 'おすすめ'; margin-left: 6px; font-size: 0.7rem; background: var(--ink); color: var(--paper); padding: 1px 6px; border-radius: var(--r3); }
+.wage { display: block; font-size: 0.85rem; margin-top: 6px; }
+.wage input, .prices input {
+  font-family: inherit; font-size: 0.9rem; border: 1.5px solid var(--line); background: var(--paper);
+  border-radius: var(--r3); padding: 3px 8px; width: 90px; color: var(--ink);
+}
+
+.sub-h { margin-top: 18px; }
+.lists { display: grid; gap: 8px; }
+.shop-list { background: var(--card); border: 1.5px solid var(--line); border-left: 5px solid var(--store); border-radius: var(--r3); padding: 8px 14px; }
+.shop-name { font-weight: 700; margin: 0 0 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.shop-name .muted { font-weight: 400; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50% 40% 55% 45%; background: var(--store); }
+.shop-list ul { list-style: none; margin: 0; padding: 0; }
+.shop-list li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px dotted var(--line); font-size: 0.88rem; }
+.subtotal { text-align: right; font-size: 0.85rem; margin: 4px 0 0; }
+.subtotal .num { font-weight: 600; font-size: 1rem; }
+.tag-off { font-size: 0.68rem; background: var(--terra); color: #fff; padding: 0 6px; border-radius: var(--r3); margin-left: 6px; }
+
+/* ---------- leftover ---------- */
+.lo-block { background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r2); padding: 10px 14px; margin-bottom: 8px; }
+.lo-block.risk { border-color: var(--terra); background: #fff8f3; }
+.lo-title { font-family: 'Klee One', serif; font-weight: 600; margin: 0 0 4px; }
+.lo-chip { display: inline-block; margin: 2px 6px 2px 0; padding: 1px 10px; border-radius: var(--r3); font-size: 0.82rem; }
+.lo-short { background: var(--terra-wash); }
+.lo-freeze { background: var(--sky-wash); }
+.lo-long { background: var(--sage-wash); }
+.sugg { background: var(--sage-wash); border-radius: var(--r1); padding: 10px 14px; }
+.sugg ul { list-style: none; padding: 0; margin: 4px 0 0; }
+.sugg li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px dashed rgba(127, 159, 122, 0.5); }
+.sugg li > div { display: flex; flex-direction: column; }
+
+/* ---------- store view ---------- */
+.store-switch { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.pill { border: 1.5px solid var(--store); background: var(--card); border-radius: var(--r3); padding: 5px 14px; font-size: 0.88rem; }
+.pill.is-on { background: var(--store); color: #fff; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.kpi { background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r1); padding: 10px 16px; box-shadow: var(--shadow); }
+.kpi:nth-child(2) { border-radius: var(--r2); }
+.store-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 900px) { .store-grid { grid-template-columns: 1.15fr 1fr; } }
+.panel { background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r2); padding: 14px 16px; box-shadow: var(--shadow); min-width: 0; }
+.legend { display: flex; gap: 14px; font-size: 0.78rem; color: var(--ink-soft); margin-bottom: 6px; }
+.legend i { display: inline-block; width: 14px; height: 8px; border-radius: 4px 2px 5px 2px; margin-right: 4px; vertical-align: middle; }
+.lg-demand, .bar.demand { background: var(--ink); opacity: 0.75; }
+.lg-stock, .bar.stock { background: var(--mustard); }
+.bars { list-style: none; margin: 0; padding: 0; }
+.bars li {
+  display: grid; grid-template-columns: 5.5em minmax(0, 1fr) 4.2em 6.6em; align-items: center; gap: 8px;
+  padding: 5px 0; border-top: 1px dotted var(--line); font-size: 0.82rem;
+}
+.b-bars { display: flex; flex-direction: column; gap: 3px; }
+.bar { display: block; height: 7px; border-radius: 6px 2px 7px 3px; }
+.b-num { text-align: right; color: var(--ink-soft); }
+.b-status { font-size: 0.74rem; padding: 1px 6px; border-radius: var(--r3); text-align: center; background: var(--paper); }
+.st-short .b-status { background: var(--sky-wash); color: #3d6b86; }
+.st-risk .b-status { background: var(--terra-wash); color: #a3543a; }
+.st-risk .bar.stock { background: var(--terra); }
+.st-extra .b-status { background: var(--mustard-wash); }
+.risk-card { border: 1.5px solid var(--terra); background: #fff8f3; border-radius: var(--r1); padding: 10px 14px; margin-bottom: 8px; }
+.risk-card:nth-child(even) { border-radius: var(--r2); }
+.risk-card.is-sent { border-style: dashed; background: var(--card); }
+.risk-card button { margin-top: 6px; }
+.ranking { margin: 0; padding-left: 1.4em; }
+.ranking li { padding: 2px 0; }
+.ranking li span:first-child { margin-right: 8px; }
+.foot-note { margin-top: 12px; }
+
+/* ---------- prices ---------- */
+.table-wrap { overflow-x: auto; background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r2); margin-bottom: 12px; }
+.prices { border-collapse: collapse; width: 100%; min-width: 480px; }
+.prices th, .prices td { padding: 6px 10px; text-align: left; border-bottom: 1px dotted var(--line); }
+.prices thead th { font-weight: 500; font-size: 0.88rem; vertical-align: bottom; }
+.prices thead th .muted, .prices tbody th .muted { display: block; font-weight: 400; }
+.prices tbody th { font-weight: 500; font-size: 0.9rem; }
+.prices td.is-min input { border-color: var(--sage); background: var(--sage-wash); }
+
+.foot { max-width: 1120px; margin: 0 auto; padding: 12px 16px 28px; color: var(--ink-soft); font-size: 0.78rem; }
+
+@media (max-width: 520px) {
+  .bars li { grid-template-columns: 4.8em minmax(0, 1fr) 3.8em; }
+  .b-status { grid-column: 2 / 4; justify-self: start; }
+  .big { font-size: 1.7rem; }
+}
+
+/* ---------- mobile summary bar ---------- */
+.mbar {
+  position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 5;
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  background: var(--ink); color: var(--paper); border-radius: var(--r1); box-shadow: 0 4px 14px rgba(59, 54, 49, 0.2);
+  font-size: 0.85rem;
+}
+.mbar span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mbar b { font-size: 1.1rem; }
+.mbar a { color: var(--paper); border: 1.5px solid var(--paper); border-radius: var(--r3); padding: 3px 10px; text-decoration: none; white-space: nowrap; }
+.mbar[hidden] { display: none; }
+@media (min-width: 900px) { .mbar { display: none; } }
+@media (max-width: 899px) { body { padding-bottom: 70px; } }
+
+/* ---------- add recipe ---------- */
+#add-form { margin-bottom: 16px; }
+.add-open {
+  width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 0;
+  background: var(--card); border: 1.5px dashed var(--ink-soft); border-radius: var(--r2);
+  padding: 10px 16px; font-size: 0.95rem; text-align: left;
+}
+.add-open:hover { background: var(--mustard-wash); }
+.add-card { background: var(--card); border: 2px solid var(--ink); border-radius: var(--r1); padding: 12px 16px; box-shadow: 3px 4px 0 rgba(59, 54, 49, 0.1); }
+.f-head { display: flex; justify-content: space-between; align-items: baseline; }
+.f-head h3 { margin: 0 0 6px; }
+.f-name { display: flex; gap: 8px; flex-wrap: wrap; }
+.f-name input { flex: 1 1 180px; }
+.add-card input[type=text], .add-card input[type=number], .add-card input[type=password], .add-card select {
+  font-family: inherit; font-size: 0.92rem; color: var(--ink); background: var(--paper);
+  border: 1.5px solid var(--line); border-radius: var(--r3); padding: 6px 10px; min-width: 0;
+}
+.add-card input:focus, .add-card select:focus { outline: 2px solid var(--mustard); outline-offset: 1px; }
+.f-status { background: var(--mustard-wash); border-radius: var(--r3); padding: 4px 10px; margin-top: 8px; }
+.f-tags { display: flex; gap: 6px; margin: 10px 0 2px; flex-wrap: wrap; }
+.f-tag input { position: absolute; opacity: 0; pointer-events: none; }
+.f-tag span { display: inline-block; padding: 2px 12px; border-radius: var(--r3); border: 1.5px solid transparent; cursor: pointer; font-size: 0.85rem; }
+.f-tag span[data-tag="主菜"], .tag-mini[data-tag="主菜"] { background: var(--terra-wash); }
+.f-tag span[data-tag="主食"], .tag-mini[data-tag="主食"] { background: var(--mustard-wash); }
+.f-tag span[data-tag="汁物"], .tag-mini[data-tag="汁物"] { background: var(--sky-wash); }
+.f-tag span[data-tag="副菜"], .tag-mini[data-tag="副菜"] { background: var(--sage-wash); }
+.f-tag input:checked + span { border-color: var(--ink); }
+.f-tag input:focus-visible + span { outline: 2px solid var(--mustard); }
+.f-rows { display: grid; gap: 6px; margin: 4px 0; }
+.f-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 2.6em 28px; gap: 6px; align-items: center; }
+.f-unit { font-size: 0.82rem; color: var(--ink-soft); }
+.f-del { border: 0; background: none; font-size: 1.1rem; color: var(--ink-soft); padding: 0; }
+.f-new { grid-column: 1 / -1; margin: -2px 0 2px; }
+.f-actions { margin-top: 10px; }
+.f-ai { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 6px; }
+.f-ai summary { cursor: pointer; color: var(--ink-soft); }
+.f-ai label { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.f-ai label input { flex: 1; }
+.tag-title[data-tag="mine"] { background: var(--ink); color: var(--paper); }
+.tag-mini { font-family: 'Zen Maru Gothic', sans-serif; font-size: 0.68rem; padding: 0 6px; border-radius: var(--r3); margin-left: 6px; vertical-align: 2px; }
+.recipe .link.small { padding: 0; font-size: 0.75rem; }
+
+/* ---------- picked dishes ---------- */
+.recipe.is-on { background: #fbf4e2; border-width: 2px; }
+.recipe.is-on[data-tag="主菜"] { background: #fcefe8; }
+.recipe.is-on[data-tag="汁物"] { background: #eef4f8; }
+.recipe.is-on[data-tag="副菜"] { background: #f0f5ec; }
+.on-badge {
+  display: inline-block; font-size: 0.68rem; background: var(--ink); color: var(--paper);
+  padding: 0 7px; border-radius: var(--r3); margin-bottom: 2px;
+}
+.picked {
+  background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r2);
+  padding: 12px 16px; margin-bottom: 12px; box-shadow: var(--shadow);
+}
+.picked-head { display: flex; justify-content: space-between; align-items: baseline; }
+.picked-title { font-family: 'Klee One', serif; font-weight: 600; font-size: 1rem; margin: 0; }
+.picked-total { margin: 0; }
+.picked-total .num { font-size: 1.6rem; font-weight: 600; margin-right: 2px; }
+.picked-tags { margin: 0 0 6px; }
+.picked-tags .tag-mini { margin: 0 6px 0 0; font-size: 0.75rem; padding: 1px 8px; }
+.picked-list { list-style: none; margin: 0 0 6px; padding: 0; }
+.picked-list li { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px dashed var(--line); }
+.p-dot { width: 10px; height: 10px; flex: none; border-radius: 50% 40% 55% 45%; background: var(--mustard); }
+.p-dot[data-tag="主菜"] { background: var(--terra); }
+.p-dot[data-tag="汁物"] { background: var(--sky); }
+.p-dot[data-tag="副菜"] { background: var(--sage); }
+.p-name { flex: 1; min-width: 0; font-size: 0.98rem; }
+.p-step { display: flex; align-items: center; gap: 6px; flex: none; }
+.p-step .num { min-width: 2.2em; text-align: center; font-weight: 600; }
+.p-step button {
+  width: 24px; height: 24px; padding: 0; line-height: 1; font-size: 0.9rem;
+  border: 1.5px solid var(--line); background: var(--paper); border-radius: 48% 52% 46% 54%;
+}
+.p-step button:hover { border-color: var(--ink); }
+
+/* ---------- わけあい ---------- */
+.share-block { background: var(--sky-wash); border-radius: var(--r2); padding: 10px 14px; margin-bottom: 8px; }
+.share-block ul { list-style: none; padding: 0; margin: 6px 0 0; }
+.share-block li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px dashed rgba(127, 166, 191, 0.55); }
+.share-block li > div { display: flex; flex-direction: column; min-width: 0; }
+.share-block li.is-on b { color: #3d6b86; }
+.tag-share { font-size: 0.68rem; background: var(--sky); color: #fff; padding: 0 6px; border-radius: var(--r3); margin-left: 6px; white-space: nowrap; }
+
+/* ---------- 配信枠・混雑 ---------- */
+.offer-slot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 2px 0 4px; }
+.slot-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 4px; }
+.slot { background: var(--sky-wash); padding: 0 8px; border-radius: var(--r3); font-size: 0.75rem; }
+.crowd { background: var(--paper); border: 1.5px dashed var(--line); border-radius: var(--r2); padding: 10px 14px; margin-bottom: 10px; }
+.crowd-title { font-family: 'Klee One', serif; font-weight: 600; margin: 0 0 6px; }
+.crowd-bars { display: grid; grid-template-columns: repeat(12, 1fr); align-items: end; gap: 4px; height: 96px; }
+.cb { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.cb-stack { width: 100%; max-width: 22px; background: var(--ink); opacity: 0.7; border-radius: 6px 3px 2px 2px; display: flex; flex-direction: column; overflow: hidden; min-height: 2px; }
+.cb-add { display: block; width: 100%; background: var(--sky); opacity: 1; }
+.cb-h { font-size: 0.68rem; color: var(--ink-soft); margin-top: 2px; }
+.lg-base { background: var(--ink); opacity: 0.7; }
+.lg-add { background: var(--sky); }
+
+/* ---------- レシート ---------- */
+.receipt { background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r1); padding: 12px 16px; margin-bottom: 16px; box-shadow: var(--shadow); max-width: 640px; }
+.receipt h3 { margin-bottom: 2px; }
+.rc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.receipt select, .receipt textarea {
+  font-family: inherit; font-size: 0.9rem; color: var(--ink); background: var(--paper);
+  border: 1.5px solid var(--line); border-radius: var(--r3); padding: 5px 10px;
+}
+.receipt textarea { width: 100%; display: block; margin-bottom: 8px; resize: vertical; line-height: 1.6; }
+.rc-result { list-style: none; padding: 0; margin: 10px 0 4px; }
+.rc-result li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px dotted var(--line); font-size: 0.88rem; }
+.p-date { display: block; font-size: 0.66rem; color: var(--sky); margin-top: 1px; }
+
+/* ---------- タグバー ---------- */
+#tagbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 4; margin: 0 -16px 12px; padding: 6px 16px; background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(4px); }
+.tagbar { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 2px 0; }
+.tagbar::-webkit-scrollbar { display: none; }
+.tb {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 0.86rem;
+  border: 1.5px solid var(--line); background: var(--card); padding: 4px 12px; border-radius: var(--r3);
+}
+.tb .tb-n { font-size: 0.72rem; color: var(--ink-soft); font-family: 'Klee One', serif; }
+.tb[data-tag="主菜"] { border-color: #e7bfae; }
+.tb[data-tag="主食"] { border-color: #e9d29b; }
+.tb[data-tag="汁物"] { border-color: #b9d0de; }
+.tb[data-tag="副菜"] { border-color: #bdd0b6; }
+.tb.is-on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.tb.is-on .tb-n { color: var(--paper); opacity: 0.8; }
+.tb:focus-visible { outline: 2px solid var(--mustard); outline-offset: 1px; }
+.tag-title[data-tag="picked"] { background: var(--mustard-wash); }
+.tb-empty { padding: 16px 0; }
+
+/* ---------- 買った！ ---------- */
+.buy-row { display: block !important; padding: 4px 0 !important; }
+.br-main { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; }
+.tick {
+  width: 24px; height: 24px; padding: 0; line-height: 1; font-size: 0.9rem; font-weight: 700;
+  border: 1.5px solid var(--ink-soft); background: var(--card); color: var(--paper); border-radius: 7px 5px 8px 4px;
+}
+.buy-row.is-done .tick { background: var(--sage); border-color: var(--sage); }
+.buy-row.is-skip .tick { background: var(--line); border-color: var(--line); color: var(--ink-soft); }
+.buy-row.is-done .br-name { color: var(--ink-soft); }
+.buy-row.is-skip .br-name, .buy-row.is-skip .br-price { color: var(--ink-soft); text-decoration: line-through; }
+.br-name { min-width: 0; }
+.chg { font-size: 0.68rem; background: var(--mustard-wash); color: #8a6420; padding: 0 6px; border-radius: var(--r3); margin-left: 6px; white-space: nowrap; text-decoration: none; display: inline-block; }
+.br-edit { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; background: var(--paper); border-radius: var(--r3); padding: 8px 10px; margin: 6px 0 4px 34px; font-size: 0.82rem; }
+.br-edit label { display: inline-flex; align-items: center; gap: 6px; }
+.br-edit select, .br-edit input { font-family: inherit; font-size: 0.85rem; color: var(--ink); background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r3); padding: 3px 8px; }
+.br-edit input[type=number] { width: 80px; }
+.br-actions { display: flex; gap: 8px; flex-wrap: wrap; width: 100%; }
+.extras { background: var(--card); border: 1.5px dashed var(--line); border-radius: var(--r3); padding: 6px 14px; }
+.extras ul { list-style: none; margin: 0 0 4px; padding: 0; }
+.extras li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px dotted var(--line); font-size: 0.88rem; }
+.extras li > span:first-child { flex: 1; }
+.extras summary { cursor: pointer; padding: 3px 0; color: var(--ink-soft); }
+.extras .br-edit { margin-left: 0; }
+.buybar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; background: var(--sage-wash); border: 1.5px solid var(--sage);
+  border-radius: var(--r1); padding: 10px 16px;
+}
+.buybar > div:not(.bb-actions) { display: flex; flex-direction: column; }
+.buybar .num { font-size: 1rem; }
+.buybar .num b { font-size: 1.25rem; }
+.bb-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+.btn:disabled { opacity: 0.35; cursor: default; }
+.recorded { background: var(--sage-wash); border: 1.5px solid var(--sage); border-radius: var(--r2); padding: 10px 14px; margin-top: 14px; font-size: 0.9rem; }
+
+/* ---------- きろく ---------- */
+.hist { display: grid; gap: 10px; max-width: 720px; }
+.h-card { background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r1); padding: 12px 16px; box-shadow: var(--shadow); }
+.h-card:nth-child(even) { border-radius: var(--r2); }
+.h-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.h-date { font-size: 1.15rem; font-weight: 600; margin: 0; }
+.h-sum { margin: 0; display: flex; flex-direction: column; align-items: flex-end; }
+.big2 { font-size: 1.4rem; font-weight: 600; }
+.warn { color: var(--terra); }
+.h-card summary { cursor: pointer; color: var(--ink-soft); margin-top: 4px; }
+.h-lines { list-style: none; padding: 0; margin: 6px 0; }
+.h-lines li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px dotted var(--line); font-size: 0.88rem; }
+@media (max-width: 520px) {
+  .tabs { width: 100%; }
+  .tab { flex: 1; padding: 7px 6px; font-size: 0.84rem; }
+  .br-edit { margin-left: 0; }
+  .bb-actions { margin-left: 0; width: 100%; }
+}
+
+/* ---------- 家にある食材 ---------- */
+.pantry { background: var(--card); border: 1.5px solid var(--sage); border-radius: var(--r2); padding: 10px 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
+.pantry-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.pantry-chips { margin: 4px 0; }
+.pantry .lo-chip { display: inline-flex; align-items: center; gap: 4px; }
+.pantry .lo-chip small { font-size: 0.66rem; color: var(--ink-soft); margin-left: 2px; }
+.pantry .lo-chip.is-old { outline: 1.5px solid var(--terra); }
+.pantry .lo-chip.is-old small { color: var(--terra); }
+.x { border: 0; background: none; padding: 0 0 0 4px; font-size: 0.9rem; line-height: 1; color: var(--ink-soft); }
+.x:hover { color: var(--ink); }
+.pantry summary { cursor: pointer; color: var(--ink-soft); padding: 2px 0; }
+.pantry .br-edit { margin-left: 0; }
+.home-use { background: var(--sage-wash); border-radius: var(--r2); padding: 10px 14px; margin-top: 14px; }
+.lo-home { background: var(--card); }
+.tag-home { font-size: 0.68rem; background: var(--sage-wash); color: #4f7449; padding: 0 6px; border-radius: var(--r3); margin-left: 6px; white-space: nowrap; display: inline-block; }
+.home-sugg { margin-top: 10px; }
+#recorded:empty { display: none; }
+#recorded .recorded { margin: 0 0 12px; }
+
+/* ---------- スクロールを減らす ---------- */
+/* 献立カードを小さく */
+.recipe-grid { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px; }
+.recipe { padding: 7px 10px; gap: 8px; border-width: 1.5px; }
+.recipe.is-on { border-width: 1.5px; border-color: var(--ink); }
+.recipe h4 { font-size: 0.9rem; line-height: 1.4; }
+.uses { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.72rem; margin: 0; }
+.recipe-main { min-width: 0; }
+.stepper button { width: 26px; height: 26px; font-size: 0.95rem; }
+.recipe-group { margin-bottom: 10px; }
+.tag-title { margin-bottom: 5px; }
+.add-open { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 7px 14px; font-size: 0.9rem; }
+#add-form { margin-bottom: 10px; }
+.step-head { margin: 10px 0 4px; }
+
+/* 右側をタブで切り替え */
+.ptabs { display: flex; gap: 4px; background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r2); padding: 4px; margin: 10px 0 10px; box-shadow: var(--shadow); }
+.pt { flex: 1; border: 0; background: transparent; border-radius: var(--r3); padding: 7px 4px; font-size: 0.86rem; display: inline-flex; justify-content: center; align-items: center; gap: 5px; white-space: nowrap; }
+.pt.is-on { background: var(--ink); color: var(--paper); }
+.pt-n { font-family: 'Klee One', serif; font-size: 0.72rem; background: var(--mustard-wash); color: var(--ink); border-radius: 8px; padding: 0 6px; }
+.pt-n .pt-warn { color: var(--terra); font-weight: 700; }
+.pt:focus-visible { outline: 2px solid var(--mustard); outline-offset: 1px; }
+.next-btn { margin-top: 12px; width: 100%; padding: 9px 16px; }
+.list-hint { margin: 0 0 8px; }
+.ppanel .home-use { margin-top: 10px; }
+.ppanel .pantry { margin-bottom: 0; }
+
+/* えらんだ献立をチップで */
+.picked { padding: 10px 14px; }
+.picked-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.picked-title { font-size: 0.95rem; }
+.picked-title .num { font-size: 1.25rem; margin-left: 4px; }
+.picked-title small { font-size: 0.75rem; margin-left: 2px; }
+.picked-head .picked-tags { margin: 0; flex: 1; }
+.picked-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pc { display: inline-flex; align-items: center; gap: 5px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r3); padding: 2px 4px 2px 8px; font-size: 0.85rem; }
+.pc button { width: 20px; height: 20px; padding: 0; line-height: 1; border: 1px solid var(--line); background: var(--card); border-radius: 50%; font-size: 0.8rem; }
+.pc b { min-width: 1em; text-align: center; font-size: 0.85rem; }
+.pc .p-dot { width: 8px; height: 8px; }
+
+/* パソコン：右側を画面に固定して、左右を同時に見られるように */
+@media (min-width: 900px) {
+  .col-right { position: sticky; top: 8px; align-self: start; max-height: calc(100vh - 16px); overflow-y: auto; padding: 0 4px 16px; scrollbar-width: thin; }
+}
+
+/* スマホ：「えらぶ」と「プラン」を下のバーで切り替え */
+.mbar button { font: inherit; font-size: 0.85rem; color: var(--paper); background: transparent; border: 1.5px solid var(--paper); border-radius: var(--r3); padding: 3px 10px; white-space: nowrap; }
+.mbar { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 899px) {
+  .shop-grid[data-mv="pick"] .col-right { display: none; }
+  .shop-grid[data-mv="plan"] .col-left { display: none; }
+  .ptabs { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 4; }
+  .pt { font-size: 0.8rem; padding: 7px 2px; }
+}
+.tag-mini { white-space: nowrap; }
+@media (max-width: 599px) {
+  .picked-head .picked-tags { display: none; }
+  .picked-head { justify-content: space-between; }
+  .add-open .muted { display: none; }
+  .top { padding-top: 12px; gap: 8px; }
+  .logo { width: 40px; height: 40px; }
+  h1 { font-size: 1.2rem; }
+  .tagline { display: none; }
+}
+
+/* ---------- ログイン ---------- */
+body.locked .top, body.locked main, body.locked .foot, body.locked .mbar { display: none !important; }
+#auth:empty { display: none; }
+#auth { min-height: 100vh; display: grid; place-items: center; padding-inline: 16px; padding-block: 32px; }
+.au-card {
+  width: 100%; max-width: 420px; background: var(--card); border: 2px solid var(--ink); border-radius: var(--r1);
+  padding: 22px 22px 18px; box-shadow: 4px 5px 0 rgba(59, 54, 49, 0.1);
+}
+.au-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.au-brand h1 { font-size: 1.35rem; }
+.au-tabs { display: flex; gap: 4px; background: var(--paper); border-radius: var(--r2); padding: 4px; margin-bottom: 14px; }
+.au-tabs button { flex: 1; border: 0; background: transparent; padding: 7px; border-radius: var(--r3); font-size: 0.92rem; }
+.au-tabs button.is-on { background: var(--ink); color: var(--paper); }
+.au-form { display: grid; gap: 10px; }
+.au-field { display: grid; gap: 4px; border: 0; padding: 0; margin: 0; }
+.au-field span, .au-field legend { font-size: 0.82rem; color: var(--ink-soft); }
+.au-field input, .au-field select {
+  font-family: inherit; font-size: 1rem; color: var(--ink); background: var(--paper);
+  border: 1.5px solid var(--line); border-radius: var(--r3); padding: 8px 12px; width: 100%;
+}
+.au-field input:focus, .au-field select:focus { outline: 2px solid var(--mustard); outline-offset: 1px; }
+.au-main { width: 100%; padding: 10px; font-size: 0.95rem; margin-top: 4px; }
+.au-step { font-size: 0.85rem; margin: 0; }
+.au-loc { color: var(--ink-soft); margin-left: 6px; }
+.au-stores { list-style: none; margin: 0; padding: 8px 12px; background: var(--paper); border-radius: var(--r3); font-size: 0.86rem; }
+.au-stores li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+.au-stores span { color: var(--ink-soft); font-size: 0.75rem; }
+.au-radios, .acc-radios { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.92rem; }
+.au-radios label, .acc-radios label { display: inline-flex; align-items: center; gap: 5px; }
+.au-msg { background: var(--terra-wash); color: #8c4a33; border-radius: var(--r3); padding: 6px 12px; font-size: 0.86rem; margin: 10px 0 0; }
+.au-note { color: var(--ink-soft); font-size: 0.78rem; margin-top: 10px; }
+.au-sep { display: flex; align-items: center; gap: 10px; color: var(--ink-soft); font-size: 0.78rem; margin: 14px 0 10px; }
+.au-sep::before, .au-sep::after { content: ''; flex: 1; border-top: 1px dashed var(--line); }
+.au-guest { width: 100%; padding: 8px; }
+
+/* ---------- アカウント ---------- */
+.tab-acc { display: inline-flex; align-items: center; gap: 6px; }
+.avatar { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50% 45% 52% 48%; background: var(--mustard-wash); color: var(--ink); font-size: 0.78rem; font-weight: 700; }
+.tab.is-on .avatar { background: var(--paper); }
+.big-av { width: 44px; height: 44px; font-size: 1.2rem; flex: none; }
+.area-chip { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; border: 1px solid var(--line); background: var(--card); border-radius: var(--r3); padding: 1px 10px; font-size: 0.75rem; color: var(--ink-soft); }
+.area-chip:hover { color: var(--ink); border-color: var(--ink-soft); }
+.acc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; align-items: start; }
+.acc-card { background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r1); padding: 14px 18px; box-shadow: var(--shadow); display: grid; gap: 8px; min-width: 0; }
+.acc-card:nth-child(even) { border-radius: var(--r2); }
+.acc-card h3 { margin: 0; }
+.acc-label { display: block; font-size: 0.8rem; color: var(--ink-soft); margin: 2px 0 0; }
+.acc-row { display: flex; align-items: center; gap: 12px; }
+.acc-row > div { flex: 1; min-width: 0; }
+.acc-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
+.acc-card input[type=text], .acc-card input[type=number], .acc-card select {
+  font-family: inherit; font-size: 0.92rem; color: var(--ink); background: var(--paper);
+  border: 1.5px solid var(--line); border-radius: var(--r3); padding: 5px 10px; max-width: 100%;
+}
+.acc-card input[type=text] { width: 100%; }
+.acc-card input[type=number] { width: 100px; }
+.acc-stores { list-style: none; margin: 0; padding: 0; }
+.acc-stores li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px dotted var(--line); font-size: 0.88rem; }
+.acc-stores li .muted { display: block; }
+.acc-switch { display: flex; align-items: flex-start; gap: 8px; font-size: 0.9rem; }
+.acc-switch input { margin-top: 5px; }
+.acc-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.danger { border-color: var(--terra) !important; color: #a3543a; }
+.warn { color: var(--terra); }
+@media (max-width: 520px) {
+  .tabs { flex-wrap: nowrap; overflow-x: auto; }
+  .acc-tab-label { display: none; }
+  .tab-acc { flex: 0 0 auto !important; }
+}
+.au-field input[type=radio] { width: auto; padding: 0; }
+.tab { white-space: nowrap; }
+@media (max-width: 520px) { .tab { font-size: 0.8rem; padding: 7px 4px; } }
