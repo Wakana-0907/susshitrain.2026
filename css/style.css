@@ -591,3 +591,18 @@ body.locked .top, body.locked main, body.locked .foot, body.locked .mbar { displ
 .au-field input[type=radio] { width: auto; padding: 0; }
 .tab { white-space: nowrap; }
 @media (max-width: 520px) { .tab { font-size: 0.8rem; padding: 7px 4px; } }
+
+/* ---------- FBを受けて：分かりやすく ---------- */
+.good-note { color: #4f7449; }
+.options summary { font-weight: 500; }
+.opt-head { font-size: 0.8rem; color: var(--ink-soft); margin: 10px 0 0; }
+.options .compare { margin-top: 8px; }
+.wage-box { background: var(--paper); border-radius: var(--r3); padding: 8px 12px; margin: 8px 0 6px; }
+.wage-box .wage { margin: 0 0 4px; line-height: 2; }
+.offer-card summary { cursor: pointer; list-style: none; }
+.offer-card summary::-webkit-details-marker { display: none; }
+.offer-card summary::before { content: '▸ '; color: var(--terra); }
+.offer-card[open] summary::before { content: '▾ '; }
+.offer-card[open] summary { margin-bottom: 6px; }
+.offer-sum { color: var(--terra); font-weight: 700; font-family: 'Zen Maru Gothic', sans-serif; }
+#ex-name-wrap[hidden] { display: none; }

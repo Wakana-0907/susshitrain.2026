@@ -370,9 +370,10 @@ function renderRecipes() {
 function renderOffers() {
   const box = $('#offers');
   if (!state.offers.length || !SETTINGS.offersOn) { box.innerHTML = ''; return; }
+  const first = state.offers[0];
   box.innerHTML = `
-    <div class="offer-card">
-      <p class="offer-head">お店からのおすすめ</p>
+    <details class="offer-card" id="offer-details" ${state.offerOpen ? 'open' : ''}>
+      <summary class="offer-head">お店からのおすすめ ${state.offers.length}件　<span class="offer-sum">${esc(INGREDIENTS[first.ing].name)} ${Math.round(first.discount * 100)}%オフ${state.offers.length > 1 ? ' ほか' : ''}</span><span class="muted small">（タップで開く）</span></summary>
       ${state.offers.map((o) => {
         const s = storeById(o.store), ing = INGREDIENTS[o.ing];
         const rs = o.recipes.map((id) => RECIPES.find((r) => r.id === id));
@@ -388,7 +389,7 @@ function renderOffers() {
           <p class="offer-recipes">${rs.filter(Boolean).map((r) => `<button class="chip" data-action="inc" data-id="${r.id}">＋ ${esc(r.name)}</button>`).join('')}</p>
         </div>`;
       }).join('')}
-    </div>`;
+    </details>`;
 }
 
 function planLabel(p) {
@@ -511,13 +512,14 @@ function renderPlanInner() {
     if (!bestSingle || p.stores.length === 1) return null;
     const saved = bestSingle.total - p.total;
     const extra = p.minutes - bestSingle.minutes;
-    if (saved <= 0) return { text: '1軒より高くなる', bad: true };
-    if (extra <= 0) return { text: '時間も短い', good: true };
+    if (saved <= 0) return { text: '1軒で買うより高くなる', bad: true };
+    if (extra <= 0) return { text: `時間もかからず ${yen(saved)} おトク`, good: true, saved };
     const h = (saved / extra) * 60;
-    return { text: `時給 ${yen(h)}`, value: h, good: h >= state.wage };
+    return { text: `${extra}分よけいにかかって ${yen(saved)} おトク（1時間あたり ${yen(h)}）`, value: h, saved, extra, good: h >= state.wage };
   };
 
   const recH = hourly(recommended);
+  const countGap = byCount && bestSingle && byCount.plan !== bestSingle ? byCount.plan.total - bestSingle.total : 0;
   const compare = byCount && byCount.plan !== bestSingle && bestSingle
     ? `<div class="compare">
         <p class="compare-title">1軒で買うとき、「安い品目の数」で選ぶと…（お金だけで比較）</p>
@@ -564,19 +566,24 @@ function renderPlanInner() {
       <div class="rec-figs">
         <div><span class="muted small">合計</span><span class="big num">${yen(recommended.total)}</span></div>
         <div><span class="muted small">移動</span><span class="mid num">${recommended.minutes}<small>分</small></span></div>
-        ${recH && recH.value ? `<div><span class="muted small">寄り道の時給</span><span class="mid num">${yen(recH.value)}</span></div>` : ''}
+        ${recH && recH.saved ? `<div><span class="muted small">2軒目に寄ると</span><span class="mid num">${yen(recH.saved)}<small>おトク</small></span></div>` : ''}
       </div>
-      ${recommended !== cheapest ? `<p class="note">最安は「${planLabel(cheapest)}」の ${yen(cheapest.total)} ですが、移動時間を時給 ${yen(state.wage)} で考えると、こちらがおすすめです。</p>` : ''}
+      ${recH && recH.extra ? `<p class="note">2軒目に寄ると移動が${recH.extra}分ふえますが、1軒で買うより ${yen(recH.saved)} 安くなります。</p>` : ''}
+      ${recommended !== cheapest ? `<p class="note">いちばん安いのは「${planLabel(cheapest)}」の ${yen(cheapest.total)} ですが、${cheapest.minutes - recommended.minutes}分よけいにかかるわりに ${yen(recommended.total - cheapest.total)} しか変わらないので、こちらをおすすめします。</p>` : ''}
       ${!bestSingle ? '<p class="note">今回の食材は1軒ではそろわないので、2軒に分けて買うプランです。</p>' : ''}
+      ${countGap > 0 && recommended !== byCount.plan ? `<p class="note good-note">「安い品目が多いお店」で選ぶより、合計金額で選ぶと ${yen(countGap)} おトクです。</p>` : ''}
     </div>
-    ${compare}
-    <details class="options">
-      <summary>ほかの買い方とくらべる</summary>
+    <details class="options" ${state.optOpen ? 'open' : ''} id="opt-details">
+      <summary>くわしく比べる（ほかの買い方・寄り道の基準）</summary>
+      ${compare}
+      <p class="opt-head">ほかの買い方</p>
       <ul class="opt-list">${options}</ul>
-      <label class="wage">自分の時間の価値：時給
-        <input type="number" id="wage" min="0" step="50" value="${state.wage}"> 円
-      </label>
-      <p class="muted small">寄り道で浮くお金が、この時給より多ければ2軒回る価値ありと考えます。</p>
+      <div class="wage-box">
+        <label class="wage" for="wage">寄り道するのは、1時間あたり
+          <input type="number" id="wage" min="0" step="50" value="${state.wage}"> 円以上おトクになるとき
+        </label>
+        <p class="muted small">寄り道すると時間はかかりますが、安く買えます。その「浮いたお金」を1時間あたりに直した金額が、ここで決めた金額より大きいときだけ、2軒回るプランをおすすめします。<br>例：12分よけいにかかって ¥200 安くなる → 1時間あたり ¥1,000</p>
+      </div>
     </details>
     ${homeBlock}
     <button class="btn next-btn" data-action="ptab" data-k="list">買い物リストを見る →</button>
@@ -651,13 +658,14 @@ function listRow(it, sid) {
 
 function extrasBlock() {
   const ex = state.extras;
-  const opts = Object.entries(INGREDIENTS).map(([id, ing]) => `<option value="${id}">${esc(ing.name)}（${esc(ing.packLabel)}）</option>`).join('');
+  const opts = Object.entries(INGREDIENTS).map(([id, ing]) => `<option value="${id}">${esc(ing.name)}（${esc(ing.packLabel)}）</option>`).join('') + '<option value="__other">その他（一覧にないもの）</option>';
   return `<div class="extras">
-    ${ex.length ? `<ul>${ex.map((e, i) => `<li><span>${esc(INGREDIENTS[e.id].name)}<span class="muted small">（${storeById(e.store).name}・${e.packs}個）</span><span class="chg">リスト外</span></span><span class="num">${yen(e.price)}</span><button class="link small" data-action="del-extra" data-i="${i}">消す</button></li>`).join('')}</ul>` : ''}
+    ${ex.length ? `<ul>${ex.map((e, i) => `<li><span>${esc(e.id ? INGREDIENTS[e.id].name : e.name)}<span class="muted small">（${storeById(e.store).name}・${e.packs}個）</span><span class="chg">リスト外</span></span><span class="num">${yen(e.price)}</span><button class="link small" data-action="del-extra" data-i="${i}">消す</button></li>`).join('')}</ul>` : ''}
     <details ${state.extraOpen ? 'open' : ''} id="extra-details">
       <summary class="small">＋ リストにないものを買った</summary>
       <div class="br-edit">
         <label>食材 <select id="ex-id">${opts}</select></label>
+        <label id="ex-name-wrap" hidden>品名 <input type="text" id="ex-name" maxlength="30" placeholder="例：大根、お菓子"></label>
         <label>お店 <select id="ex-store">${STORES.map((s) => `<option value="${s.id}">${s.name}</option>`).join('')}</select></label>
         <label>個数 <input type="number" id="ex-packs" min="1" step="1" value="1"></label>
         <label>払った金額 <input type="number" id="ex-price" min="0" step="1" placeholder="例：198"> 円</label>
@@ -712,7 +720,7 @@ function recordPurchase() {
     }
     pantry[it.id] = rest;
   });
-  state.extras.forEach((e) => { pantry[e.id] = (pantry[e.id] || 0) + e.packs * INGREDIENTS[e.id].pack; added.add(e.id); });
+  state.extras.forEach((e) => { if (!e.id) return; pantry[e.id] = (pantry[e.id] || 0) + e.packs * INGREDIENTS[e.id].pack; added.add(e.id); });
   for (const id of Object.keys(pantry)) if (!(pantry[id] > INGREDIENTS[id].pack * 0.03)) delete pantry[id];
   added.forEach((id) => { if (pantry[id]) state.pantryDates[id] = d.toISOString(); });
   for (const id of Object.keys(state.pantryDates)) if (!pantry[id]) delete state.pantryDates[id];
@@ -730,7 +738,8 @@ function recordPurchase() {
     if (perPack > 0 && state.prices[it.id]) { state.prices[it.id][b.store] = perPack; state.priceDates[it.id + ':' + b.store] = stamp + ' 購入'; }
   });
   state.extras.forEach((e) => {
-    lines.push({ name: INGREDIENTS[e.id].name, store: storeById(e.store).name, price: e.price, packs: e.packs, changed: true, extra: true });
+    lines.push({ name: e.id ? INGREDIENTS[e.id].name : e.name, store: storeById(e.store).name, price: e.price, packs: e.packs, changed: true, extra: true });
+    if (!e.id) return;
     const perPack = Math.round(e.price / e.packs);
     if (perPack > 0 && state.prices[e.id]) { state.prices[e.id][e.store] = perPack; state.priceDates[e.id + ':' + e.store] = stamp + ' 購入'; }
   });
@@ -1248,8 +1257,9 @@ function renderAccount() {
 
     <section class="acc-card">
       <h3>買い物の設定</h3>
-      <label class="acc-label" for="acc-wage">自分の時間の価値（時給）</label>
-      <p class="acc-inline"><input id="acc-wage" type="number" min="0" step="50" value="${state.wage}"> 円 <span class="muted small">寄り道するかどうかの判断に使います</span></p>
+      <label class="acc-label" for="acc-wage">寄り道の基準</label>
+      <p class="acc-inline">1時間あたり <input id="acc-wage" type="number" min="0" step="50" value="${state.wage}"> 円以上おトクになるなら、2軒回る</p>
+      <p class="muted small">例：12分よけいにかかって ¥200 安くなる → 1時間あたり ¥1,000。この金額より大きいときだけ寄り道をおすすめします。</p>
       <p class="acc-label">わけあいの範囲</p>
       <div class="acc-radios">${Object.entries(SHARE_SCOPES).map(([k, t]) => `<label><input type="radio" name="acc-share" data-acc-set="shareScope" value="${k}" ${SETTINGS.shareScope === k ? 'checked' : ''}>${t}</label>`).join('')}</div>
       <label class="acc-switch"><input type="checkbox" data-acc-set="offersOn" ${SETTINGS.offersOn ? 'checked' : ''}> お店からのおすすめ（値引き・取り置き）を受け取る</label>
@@ -1366,8 +1376,11 @@ document.addEventListener('click', (e) => {
   }
   if (a === 'add-extra') {
     const price = Math.round(Number($('#ex-price').value));
+    const sel = $('#ex-id').value;
+    const name = ($('#ex-name').value || '').replace(/[<>&"'`]/g, '').trim().slice(0, 30);
+    if (sel === '__other' && !name) { $('#ex-name').focus(); return; }
     if (!(price > 0)) { $('#ex-price').focus(); return; }
-    state.extras.push({ id: $('#ex-id').value, store: $('#ex-store').value, packs: Math.max(1, Math.round(Number($('#ex-packs').value) || 1)), price });
+    state.extras.push({ id: sel === '__other' ? null : sel, name: sel === '__other' ? name : '', store: $('#ex-store').value, packs: Math.max(1, Math.round(Number($('#ex-packs').value) || 1)), price });
     state.extraOpen = false; state.justRecorded = null;
   }
   if (a === 'del-extra') state.extras.splice(Number(t.dataset.i), 1);
@@ -1432,9 +1445,10 @@ document.addEventListener('change', (e) => {
     SETTINGS[el.dataset.accSet] = el.type === 'checkbox' ? el.checked : el.value;
     save(); return;
   }
+  if (el.id === 'ex-id') { $('#ex-name-wrap').hidden = el.value !== '__other'; if (el.value === '__other') $('#ex-name').focus(); return; }
   if (el.id === 'acc-wage') { state.wage = Math.max(0, Number(el.value) || 0); save(); return; }
   if (el.closest && el.closest('#add-form')) { if (el.dataset.k === 'id' || el.dataset.f === 'tag') renderForm(); return; }
-  if (el.id === 'wage') { state.wage = Math.max(0, Number(el.value) || 0); save(); renderPlan(); $('.options').open = true; }
+  if (el.id === 'wage') { state.wage = Math.max(0, Number(el.value) || 0); state.optOpen = true; save(); renderPlan(); }
   if (el.dataset && el.dataset.ing && el.dataset.store) {
     state.prices[el.dataset.ing][el.dataset.store] = el.value === '' ? null : Number(el.value);
     save(); renderPrices();
@@ -1446,4 +1460,6 @@ if (AUTH.user) { renderForm(); render(); }
 document.addEventListener('toggle', (e) => {
   if (e.target.id === 'extra-details') state.extraOpen = e.target.open;
   if (e.target.id === 'pantry-details') state.pantryOpen = e.target.open;
+  if (e.target.id === 'opt-details') state.optOpen = e.target.open;
+  if (e.target.id === 'offer-details') state.offerOpen = e.target.open;
 }, true);
