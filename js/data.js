@@ -136,11 +136,11 @@ const SHARE_DEMO = { cabbage: 3, komatsuna: 2, negi: 2, moyashi: 1, tofu: 1, shi
 // 場所（デモ）：エリアごとの近くのお店。店名は架空です
 const AREAS = [
   {
-    id: 'musashisakai', name: '武蔵境駅周辺', center: [35.7022, 139.5436],
+    id: 'musashino', name: '武蔵野周辺', center: [35.7176, 139.5440],
     stores: [
-      { name: 'こまちマート 境店', type: '近所のスーパー', walk: 4 },
-      { name: 'ひだまり業務館 境南店', type: '業務用・大容量', walk: 11 },
-      { name: 'さくらドラッグ 境駅前店', type: 'ドラッグストア', walk: 6 },
+      { name: 'こまちマート 武蔵野店', type: '近所のスーパー', walk: 4 },
+      { name: 'ひだまり業務館 武蔵野店', type: '業務用・大容量', walk: 11 },
+      { name: 'さくらドラッグ 武蔵野店', type: 'ドラッグストア', walk: 6 },
     ],
     between: { AB: 9, AC: 5, BC: 8 }, priceScale: { A: 1, B: 1, C: 1 },
   },
