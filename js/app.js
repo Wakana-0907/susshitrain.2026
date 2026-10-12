@@ -68,8 +68,7 @@ const state = {
   priceDates: LS.get('kd-price-dates', {}),
   receipt: { store: 'B', text: '', result: null },
   tagFilter: 'all',
-  planTab: 'plan',
-  mv: 'pick',
+  step: 1,
   ptabInfo: { list: '', rest: 0 },
   planTotal: null,
   pantry: LS.get('kd-pantry', {}),
@@ -399,7 +398,16 @@ function planLabel(p) {
 function renderPicked() {
   const box = $('#picked');
   const chosen = RECIPES.filter((r) => state.counts[r.id]);
-  if (!chosen.length) { box.innerHTML = ''; return; }
+  if (!chosen.length) {
+    const fromHome = Object.keys(state.pantry).length ? suggestions(restList([]), true) : [];
+    box.innerHTML = `<div class="start-card">
+      <p>作りたい献立を「＋」でえらぶと、いちばん安い買い方を出します。</p>
+      ${fromHome.length ? `<p class="lo-title">家にある食材を使える献立</p>
+        <p class="start-chips">${fromHome.map((x) => `<button class="chip" data-action="inc" data-id="${x.r.id}">＋ ${esc(x.r.name)}<span class="muted small">${x.extra.length ? '' : '・買い足しなし'}</span></button>`).join('')}</p>` : ''}
+      <button class="link small" data-action="sample">サンプルの献立を入れてみる</button>
+    </div>`;
+    return;
+  }
   const order = (r) => TAG_ORDER.indexOf(r.tag);
   chosen.sort((a, b) => order(a) - order(b));
   const total = chosen.reduce((a, r) => a + state.counts[r.id], 0);
@@ -423,33 +431,60 @@ function renderPlan() {
   state.ptabInfo = { list: '', rest: 0 };
   state.planTotal = null;
   renderPlanInner();
-  renderPtabs();
+  renderSteps();
   renderMbar();
 }
 
-function renderPtabs() {
+const STEP_NAMES = ['', '献立をえらぶ', '買い方を見る', '買い物する', '家の食材'];
+
+function renderSteps() {
   const i = state.ptabInfo;
+  const n = Object.values(state.counts).reduce((a, b) => a + b, 0);
   const home = Object.keys(state.pantry).length;
-  const tabs = [
-    ['plan', 'プラン', ''],
-    ['list', '買い物リスト', i.list],
-    ['rest', '使い切り', i.rest ? `<span class="pt-warn">${i.rest}</span>` : ''],
-    ['home', '家の食材', home ? String(home) : ''],
-  ];
-  $('#ptabs').innerHTML = tabs.map(([k, label, badge]) => `<button role="tab" aria-selected="${state.planTab === k}" class="pt ${state.planTab === k ? 'is-on' : ''}" data-action="ptab" data-k="${k}">${label}${badge ? `<span class="pt-n">${badge}</span>` : ''}</button>`).join('');
-  document.querySelectorAll('.ppanel').forEach((el) => { el.hidden = el.dataset.p !== state.planTab; });
+  if ((state.step === 2 || state.step === 3) && !n) state.step = 1;
+  const sub = ['', n ? `${n}食分` : '', state.planTotal !== null && n ? yen(state.planTotal) : '', n && i.list ? i.list : '', home ? `${home}品` : ''];
+  const locked = (k) => (k === 2 || k === 3) && !n;
+  $('#steps').innerHTML = [1, 2, 3, 4].map((k) => `<button class="st ${state.step === k ? 'is-on' : ''} ${state.step > k ? 'is-past' : ''}" data-action="step" data-k="${k}" ${locked(k) ? 'disabled' : ''} aria-current="${state.step === k ? 'step' : 'false'}">
+      <span class="st-no">${k}</span><span class="st-text"><span class="st-label">${STEP_NAMES[k]}</span><span class="st-sub">${sub[k] || '&nbsp;'}</span></span>
+    </button>`).join('');
+  document.querySelectorAll('.step-panel').forEach((el) => { el.hidden = Number(el.dataset.s) !== state.step; });
 }
 
+function goStep(k) {
+  state.step = k;
+  renderSteps();
+  renderMbar();
+  window.scrollTo({ top: 0 });
+}
+
+// 画面の下に固定する「もどる／次へ」
 function renderMbar() {
   const bar = $('#mbar');
   if (state.tab !== 'shop') { bar.hidden = true; return; }
   const n = Object.values(state.counts).reduce((a, b) => a + b, 0);
-  const total = state.planTotal !== null ? `<b class="num">${yen(state.planTotal)}</b>` : '';
-  bar.innerHTML = state.mv === 'plan'
-    ? `<button data-action="mv" data-v="pick">← 献立をえらぶ</button><span>${n ? n + '食分' : ''}</span>${total}`
-    : `<span>${n ? n + '食分えらび中' : '献立をえらんでください'}</span>${total}<button data-action="mv" data-v="plan">プランを見る →</button>`;
+  const k = state.step;
+  const backTo = k === 4 && !n ? 1 : k - 1;
+  const back = k > 1 && !(k === 4 && !n) ? `<button class="mb-back" data-action="step" data-k="${backTo}">← もどる</button>` : '<span></span>';
+  let info = '', next = '';
+  if (k === 1) {
+    info = n ? `<span class="mb-info"><b class="num">${n}</b>食分えらび中</span>` : '<span class="mb-info">献立を「＋」でえらんでください</span>';
+    next = `<button class="mb-next" data-action="step" data-k="2" ${n ? '' : 'disabled'}>買い方を見る →</button>`;
+  } else if (k === 2) {
+    info = state.planTotal !== null ? `<span class="mb-info">合計 <b class="num">${yen(state.planTotal)}</b></span>` : '<span></span>';
+    next = state.lastPlan && state.lastPlan.items.length
+      ? '<button class="mb-next" data-action="step" data-k="3">買い物リストへ →</button>'
+      : '<button class="mb-next" data-action="record">作る！（記録）</button>';
+  } else if (k === 3) {
+    const lp = state.lastPlan;
+    const done = lp ? lp.items.filter((it) => state.bought[it.id]).length : 0;
+    info = lp ? `<span class="mb-info">買った <b class="num">${done}</b> / ${lp.items.length}品</span>` : '<span></span>';
+    next = `<button class="mb-next" data-action="record" ${done + state.extras.length ? '' : 'disabled'}>買った！記録する</button>`;
+  } else {
+    info = `<span class="mb-info">家にある食材 <b class="num">${Object.keys(state.pantry).length}</b>品</span>`;
+    next = '<button class="mb-next" data-action="step" data-k="1">次の献立をえらぶ →</button>';
+  }
+  bar.innerHTML = back + info + next;
   bar.hidden = false;
-  $('.shop-grid').dataset.mv = state.mv;
 }
 
 function renderPlanInner() {
@@ -559,7 +594,8 @@ function renderPlanInner() {
   state.planTotal = recommended.total;
   const doneN = items.filter((it) => state.bought[it.id]).length;
   state.ptabInfo.list = `${doneN}/${items.length}`;
-  box.innerHTML = `
+  const dishLine = `<p class="dish-line"><span class="muted small">えらんだ献立</span> ${RECIPES.filter((r) => state.counts[r.id]).map((r) => esc(r.name) + (state.counts[r.id] > 1 ? '×' + state.counts[r.id] : '')).join('、')} <button class="link small" data-action="step" data-k="1">変える</button></p>`;
+  box.innerHTML = `${dishLine}
     <div class="rec-card">
       <p class="rec-label">おすすめの買い方</p>
       <p class="rec-stores">${planLabel(recommended)}</p>
@@ -586,7 +622,6 @@ function renderPlanInner() {
       </div>
     </details>
     ${homeBlock}
-    <button class="btn next-btn" data-action="ptab" data-k="list">買い物リストを見る →</button>
   `;
   listBox.innerHTML = `
     <p class="muted small list-hint">${planLabel(recommended)}・買ったら ✓。違うものを買ったら「変更」</p>
@@ -684,9 +719,9 @@ function buyBar(items, plan) {
     <div><span class="small muted">実際に払った</span><span class="num"><b>${yen(actual)}</b></span></div>
     <div class="bb-actions">
       ${done < items.length ? '<button class="btn-soft" data-action="tick-all">ぜんぶ買った</button>' : ''}
-      <button class="btn" data-action="record" ${any ? '' : 'disabled'}>買った！記録する</button>
     </div>
-  </div>`;
+  </div>
+  <p class="muted small bb-hint">${any ? '買い終わったら、画面の下の「買った！記録する」を押してください。' : '買ったものに ✓ をつけていきましょう。'}</p>`;
 }
 
 function recordedBanner() {
@@ -760,7 +795,7 @@ function recordPurchase() {
   state.counts = {};
   state.shares = {};
   state.tagFilter = 'all';
-  state.planTab = 'plan';
+  state.step = 4;
   state.justRecorded = rec;
 }
 
@@ -843,9 +878,12 @@ function renderLeftover(items, all) {
         <button class="btn-soft" data-action="inc" data-id="${s.r.id}">足す</button>
       </li>`).join('')}</ul>
     </div>` : ''}
-    ${shareBlock}
-    ${info.frozen.length ? `<div class="lo-block"><p class="lo-title">冷凍しておけば大丈夫</p><p>${info.frozen.map(chip).join('')}</p></div>` : ''}
-    ${info.keeps.length ? `<div class="lo-block"><p class="lo-title">日持ちするので次回へ</p><p>${info.keeps.map(chip).join('')}</p></div>` : ''}
+    ${shareBlock || info.frozen.length || info.keeps.length ? `<details class="lo-more" id="lo-more" ${state.loMore ? 'open' : ''}>
+      <summary>近くの人とわけあう・残りの保存のしかた</summary>
+      ${shareBlock}
+      ${info.frozen.length ? `<div class="lo-block"><p class="lo-title">冷凍しておけば大丈夫</p><p>${info.frozen.map(chip).join('')}</p></div>` : ''}
+      ${info.keeps.length ? `<div class="lo-block"><p class="lo-title">日持ちするので次回へ</p><p>${info.keeps.map(chip).join('')}</p></div>` : ''}
+    </details>` : ''}
   `;
 }
 
@@ -1353,8 +1391,8 @@ document.addEventListener('click', (e) => {
     keys.filter((k) => k.startsWith(KD_PREFIX)).forEach((k) => localStorage.removeItem(k));
     logout(); return;
   }
-  if (a === 'ptab') { state.planTab = t.dataset.k; renderPtabs(); const top = $('#ptabs').getBoundingClientRect().top; if (top < 0 || top > innerHeight) $('#ptabs').scrollIntoView({ block: 'start' }); return; }
-  if (a === 'mv') { state.mv = t.dataset.v; renderMbar(); window.scrollTo({ top: 0 }); return; }
+  if (a === 'step') { goStep(Number(t.dataset.k)); return; }
+  if (a === 'ptab') { goStep({ plan: 2, list: 3, rest: 2, home: 4 }[t.dataset.k] || 1); return; }
   if (a === 'tag-filter') { state.tagFilter = t.dataset.k; renderRecipes(); return; }
   if (a === 'tick') {
     if (state.bought[id]) delete state.bought[id];
@@ -1461,5 +1499,6 @@ document.addEventListener('toggle', (e) => {
   if (e.target.id === 'extra-details') state.extraOpen = e.target.open;
   if (e.target.id === 'pantry-details') state.pantryOpen = e.target.open;
   if (e.target.id === 'opt-details') state.optOpen = e.target.open;
+  if (e.target.id === 'lo-more') state.loMore = e.target.open;
   if (e.target.id === 'offer-details') state.offerOpen = e.target.open;
 }, true);

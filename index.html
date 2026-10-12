@@ -55,24 +55,35 @@
   <main>
     <section id="view-shop" class="view">
       <div id="offers"></div>
-      <div class="shop-grid">
-        <div class="col-left">
-          <div class="step-head">
-            <h2>作りたい献立をえらぶ <span class="muted small">1人分ずつ</span></h2>
-            <button class="link" data-action="clear">リセット</button>
-          </div>
-          <div id="tagbar"></div>
-          <div id="add-form"></div>
-          <div id="recipes"></div>
+      <nav class="steps" id="steps" aria-label="買い物の流れ"></nav>
+
+      <div class="step-panel" data-s="1">
+        <div class="step-head">
+          <h2>作りたい献立をえらぶ <span class="muted small">1人分ずつ</span></h2>
+          <button class="link small" data-action="clear">リセット</button>
         </div>
-        <aside class="col-right" id="plan-anchor">
-          <div id="recorded"></div>
-          <div class="ptabs" id="ptabs" role="tablist" aria-label="買い物プランの表示"></div>
-          <div class="ppanel" data-p="plan"><div id="picked"></div><div id="plan"></div></div>
-          <div class="ppanel" data-p="list" hidden><div id="list"></div></div>
-          <div class="ppanel" data-p="rest" hidden><div id="leftover"></div></div>
-          <div class="ppanel" data-p="home" hidden><div id="pantry"></div></div>
-        </aside>
+        <div id="picked"></div>
+        <div id="tagbar"></div>
+        <div id="add-form"></div>
+        <div id="recipes"></div>
+      </div>
+
+      <div class="step-panel" data-s="2" hidden>
+        <div class="step-head"><h2>いちばんおトクな買い方</h2></div>
+        <div id="plan"></div>
+        <div class="step-head"><h2>使い切りチェック <span class="muted small">買う前に、余りそうなものを確認</span></h2></div>
+        <div id="leftover"></div>
+      </div>
+
+      <div class="step-panel" data-s="3" hidden>
+        <div class="step-head"><h2>買い物リスト</h2></div>
+        <div id="list"></div>
+      </div>
+
+      <div class="step-panel" data-s="4" hidden>
+        <div class="step-head"><h2>家にある食材</h2></div>
+        <div id="recorded"></div>
+        <div id="pantry"></div>
       </div>
     </section>
 
