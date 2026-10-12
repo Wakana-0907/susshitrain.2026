@@ -1018,6 +1018,31 @@ function parseReceipt(text) {
   return out;
 }
 
+async function startReceiptOcr(file) {
+  const rc = state.receipt;
+  rc.result = null;
+  rc.ocr = { busy: true, stage: 'prepare', pct: 0 };
+  renderPrices();
+  let last = 0;
+  try {
+    const out = await readReceiptImage(file, (p) => {
+      Object.assign(rc.ocr, p);
+      const now = Date.now();
+      if (now - last > 250) { last = now; if (state.tab === 'prices') renderPrices(); }
+    });
+    rc.text = out.text;
+    // レシートにお店の名前があれば、お店を自動でえらぶ
+    const flat = out.text.replace(/\s/g, '').normalize('NFKC');
+    const hit = STORES.find((st) => flat.includes(st.name.split(/\s/)[0].normalize('NFKC')));
+    if (hit) rc.store = hit.id;
+    rc.ocr = { done: true, preview: out.preview, found: parseReceipt(out.text).length };
+  } catch (e) {
+    rc.ocr = { error: (e && e.message) || '読み取れませんでした。', preview: rc.ocr && rc.ocr.preview };
+    if (!navigator.onLine) rc.ocr.error = '初回の読み取りにはインターネット接続が必要です。';
+  }
+  if (state.tab === 'prices') renderPrices();
+}
+
 function applyReceipt() {
   const r = state.receipt;
   const found = parseReceipt(r.text);
@@ -1049,14 +1074,32 @@ function renderPrices() {
   $('#price-view').innerHTML = `
     <div class="receipt">
       <h3>レシートから価格を更新</h3>
-      <p class="muted small">スマホでレシートを撮って、写真の文字をコピー（iPhoneならテキスト認識表示）して貼り付けると、食材の価格を読み取ります。買い物のたびに価格が新しくなります。</p>
+      <p class="muted small">レシートをカメラで撮るか、写真をえらぶと、文字を読み取って食材の価格を更新します。画像はこの端末の中だけで読み取り、どこにも送りません。</p>
+      <div class="rc-cam">
+        <label class="btn rc-shot"><input type="file" id="rc-camera" accept="image/*" capture="environment" hidden>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.6-2.5h6.8L17 8h3v11H4z"/><circle cx="12" cy="13.3" r="3.4"/></svg>
+          カメラで撮る</label>
+        <label class="btn-soft rc-pick"><input type="file" id="rc-photo" accept="image/*" hidden>写真をえらぶ</label>
+      </div>
+      ${rc.ocr ? `<div class="rc-ocr">
+        ${rc.ocr.preview ? `<img src="${rc.ocr.preview}" alt="読み取ったレシート">` : ''}
+        <div>
+          ${rc.ocr.busy ? `<p class="small">${rc.ocr.stage === 'read' ? 'レシートを読み取っています' : rc.ocr.stage === 'load' ? '文字認識の準備をしています（初回は少し時間がかかります）' : '画像を整えています'}… ${rc.ocr.pct || 0}%</p>
+            <div class="rc-bar"><span style="width:${rc.ocr.pct || 0}%"></span></div>` : ''}
+          ${rc.ocr.error ? `<p class="small warn">${esc(rc.ocr.error)}</p>` : ''}
+          ${rc.ocr.done ? `<p class="small">読み取りました。下の文字を確認して、まちがいがあれば直してから「この内容で価格を更新」を押してください。${rc.ocr.found ? `<br><b>${rc.ocr.found}品目</b>の食材が見つかりました。` : '<br>食材が見つかりませんでした。明るい場所で、レシートをまっすぐ撮りなおすと読み取りやすくなります。'}</p>` : ''}
+        </div>
+      </div>` : ''}
+      <details class="rc-manual" ${rc.text || rc.ocr ? 'open' : ''}>
+        <summary class="small">読み取った文字を確認・直す（文字を貼り付けることもできます）</summary>
       <div class="rc-row">
         <label for="rc-store" class="small">お店</label>
         <select id="rc-store" data-rc="store">${STORES.map((s) => `<option value="${s.id}" ${s.id === rc.store ? 'selected' : ''}>${s.name}</option>`).join('')}</select>
         <button class="link small" data-action="receipt-sample">サンプルのレシートを入れる</button>
       </div>
       <textarea id="rc-text" data-rc="text" rows="6" placeholder="例）若鶏もも肉 300g ¥428">${esc(rc.text)}</textarea>
-      <button class="btn" data-action="receipt-read">読み取って価格を更新</button>
+      <button class="btn" data-action="receipt-read">この内容で価格を更新</button>
+      </details>
       ${rc.result ? (rc.result.length ? `<ul class="rc-result">${rc.result.map((x) => `<li><span>${esc(INGREDIENTS[x.id].name)}</span><span class="num">${x.before === null ? 'なし' : yen(x.before)} → <b>${yen(x.price)}</b></span></li>`).join('')}</ul><p class="small good">${storeById(rc.store).name}の価格を ${rc.result.length}品目 更新しました。</p>` : '<p class="small">読み取れる食材が見つかりませんでした。食材名と価格が同じ行にあるか確認してください。</p>') : ''}
     </div>
     <p class="lead">よく行くお店の価格をメモしておくと、計算に使われます。空欄は「その店では売っていない」扱いです。</p>
@@ -1319,7 +1362,7 @@ function renderAccount() {
 function renderUserChip() {
   const u = AUTH.user;
   if (!u) return;
-  $('#acc-tab').innerHTML = `<span class="avatar">${esc((u.name || '?').slice(0, 1))}</span><span class="acc-tab-label">${u.guest ? 'ゲスト' : 'アカウント'}</span>`;
+  $('#acc-tab').innerHTML = `<span class="avatar">${esc((u.name || '?').slice(0, 1))}</span><span class="bn-label">${u.guest ? 'ゲスト' : 'アカウント'}</span>`;
   $('#area-chip').innerHTML = `<button class="area-chip" data-action="go-tab" data-k="account" title="場所を変える"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M8 14.5c-.3 0-4.6-4.6-4.6-8a4.6 4.6 0 0 1 9.2 0c0 3.4-4.3 8-4.6 8z"/><circle cx="8" cy="6.4" r="1.6"/></svg>${esc(currentArea().name)}・${(TRANSPORTS[SETTINGS.transport] || TRANSPORTS.walk).label}</button>`;
 }
 
@@ -1482,6 +1525,12 @@ document.addEventListener('change', (e) => {
   if (el.dataset && el.dataset.accSet) {
     SETTINGS[el.dataset.accSet] = el.type === 'checkbox' ? el.checked : el.value;
     save(); return;
+  }
+  if (el.id === 'rc-camera' || el.id === 'rc-photo') {
+    const file = el.files && el.files[0];
+    if (file) startReceiptOcr(file);
+    el.value = '';
+    return;
   }
   if (el.id === 'ex-id') { $('#ex-name-wrap').hidden = el.value !== '__other'; if (el.value === '__other') $('#ex-name').focus(); return; }
   if (el.id === 'acc-wage') { state.wage = Math.max(0, Number(el.value) || 0); save(); return; }
