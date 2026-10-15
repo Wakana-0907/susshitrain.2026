@@ -919,3 +919,27 @@ body.tu-open { overflow: hidden; }
 .share-profile input { width: 100%; }
 .btn-soft:disabled { opacity: 0.4; cursor: default; }
 .share-block li button { white-space: nowrap; flex: none; }
+
+/* ---------- お気に入り・よく作る・最近の献立 ---------- */
+.recipe { position: relative; }
+.fav-btn { position: absolute; top: 4px; right: 4px; width: 30px; height: 30px; padding: 0; border: 0; background: transparent; display: grid; place-items: center; border-radius: 50%; }
+.fav-btn:hover { background: var(--mustard-wash); }
+.fav-btn:focus-visible { outline: 2px solid var(--mustard); }
+.recipe .stepper { margin-top: 14px; }
+.recipe-main { padding-right: 4px; }
+.made-badge { display: inline-block; margin-left: 6px; font-size: 0.66rem; font-weight: 700; color: var(--primary-dark); background: var(--primary-wash); border-radius: 999px; padding: 0 7px; vertical-align: 2px; }
+.tag-title[data-tag="fav"] { background: var(--mustard-wash); color: #a86d06; }
+.tag-title[data-tag="often"] { background: var(--primary-wash); color: var(--primary-dark); }
+.tb[data-tag="fav"]:not(.is-on) { color: #a86d06; }
+.recent { margin-bottom: 12px; }
+.recent-title { font-weight: 700; margin: 0 0 6px; }
+.recent-list { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: thin; }
+.recent-card {
+  flex: 0 0 auto; width: 210px; text-align: left; display: flex; flex-direction: column; gap: 4px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; box-shadow: var(--shadow);
+}
+.recent-card:hover { border-color: var(--primary); }
+.rc-date { font-weight: 700; color: var(--primary-dark); }
+.rc-date small { margin-left: 6px; color: var(--ink-soft); font-weight: 400; }
+.rc-names { font-size: 0.82rem; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rc-go { font-size: 0.76rem; color: var(--primary); font-weight: 700; margin-top: auto; }

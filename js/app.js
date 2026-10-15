@@ -82,6 +82,8 @@ const state = {
   bought: LS.get('kd-bought', {}),
   extras: LS.get('kd-extras', []),
   history: LS.get('kd-history', []),
+  favs: LS.get('kd-favs', {}),
+  menuLog: LS.get('kd-menu-log', null),
   editing: null,
   justRecorded: null,
   confirmDel: null,
@@ -89,6 +91,18 @@ const state = {
   acc: { area: SETTINGS.area, transport: SETTINGS.transport, locMsg: '' },
   confirmAcc: null,
 };
+// 献立の履歴（これまでに記録した献立）。以前の記録があれば、そこから作る
+if (!Array.isArray(state.menuLog)) {
+  state.menuLog = state.history.slice().reverse().map((h) => {
+    const counts = {};
+    (h.dishes || []).forEach((d) => {
+      const m = String(d).match(/^(.*?)(?:×(\d+))?$/);
+      const r = RECIPES.find((x) => x.name === m[1]);
+      if (r) counts[r.id] = (counts[r.id] || 0) + Number(m[2] || 1);
+    });
+    return { at: h.at, counts };
+  }).filter((x) => Object.keys(x.counts).length).reverse();
+}
 // 削除済みの献立が残っていたら外す
 for (const id of Object.keys(state.counts)) if (!RECIPES.find((r) => r.id === id)) delete state.counts[id];
 
@@ -106,6 +120,8 @@ function save() {
   LS.set('kd-bought', state.bought);
   LS.set('kd-extras', state.extras);
   LS.set('kd-history', state.history);
+  LS.set('kd-favs', state.favs);
+  LS.set('kd-menu-log', state.menuLog);
   LS.set('kd-pantry', state.pantry);
   LS.set('kd-pantry-dates', state.pantryDates);
   LS.set('kd-settings', SETTINGS);
@@ -326,13 +342,25 @@ function storeDemand(storeId) {
 
 const TAG_ORDER = ['主菜', '主食', '汁物', '副菜'];
 
+// よく作る回数（献立の履歴から数える）
+function madeCounts() {
+  const n = {};
+  (state.menuLog || []).forEach((m) => { for (const [id, c] of Object.entries(m.counts)) n[id] = (n[id] || 0) + c; });
+  return n;
+}
+
+const STAR = (on) => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 3.6l2.5 5.2 5.7.8-4.1 4 1 5.6L12 16.5l-5.1 2.7 1-5.6-4.1-4 5.7-.8z" fill="${on ? '#f2b84b' : 'none'}" stroke="${on ? '#e0a332' : '#9aabb5'}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+
 function recipeCard(r) {
   const c = state.counts[r.id] || 0;
   const uses = Object.entries(r.uses).map(([id, q]) => `${INGREDIENTS[id].name} ${fmtQty(id, q)}`).join('、');
+  const fav = !!state.favs[r.id];
+  const made = (state.madeCache || {})[r.id] || 0;
   return `
     <article class="recipe ${c ? 'is-on' : ''}" data-tag="${r.tag}">
+      <button class="fav-btn ${fav ? 'is-on' : ''}" data-action="fav" data-id="${r.id}" aria-pressed="${fav}" aria-label="${esc(r.name)}をお気に入り${fav ? 'から外す' : 'に登録'}">${STAR(fav)}</button>
       <div class="recipe-main">
-        <h4>${esc(r.name)}${r.custom ? `<span class="tag-mini" data-tag="${r.tag}">${r.tag}</span>` : ''}</h4>
+        <h4>${esc(r.name)}${r.custom ? `<span class="tag-mini" data-tag="${r.tag}">${r.tag}</span>` : ''}${made ? `<span class="made-badge">${made}回</span>` : ''}</h4>
         <p class="uses">${uses}</p>
         ${r.custom ? `<button class="link small" data-action="del-recipe" data-id="${r.id}">削除</button>` : ''}
       </div>
@@ -348,9 +376,13 @@ function renderTagbar() {
   const f = state.tagFilter;
   const picked = Object.values(state.counts).reduce((a, b) => a + b, 0);
   const mine = RECIPES.filter((r) => r.custom).length;
+  const favN = RECIPES.filter((r) => state.favs[r.id]).length;
+  const madeN = Object.keys(state.madeCache || {}).filter((id) => RECIPES.find((r) => r.id === id)).length;
   const tabs = [
     ['all', 'すべて', RECIPES.length],
     ['picked', 'えらび中', picked],
+    ['fav', '★ お気に入り', favN],
+    ['often', 'よく作る', madeN],
     ...(mine ? [['mine', 'じぶんの献立', mine]] : []),
     ...TAG_ORDER.map((t) => [t, t, RECIPES.filter((r) => r.tag === t && !r.custom).length]),
   ];
@@ -361,6 +393,7 @@ function renderTagbar() {
 }
 
 function renderRecipes() {
+  state.madeCache = madeCounts();
   renderTagbar();
   const f = state.tagFilter;
   const group = (title, tag, list) => list.length
@@ -370,8 +403,16 @@ function renderRecipes() {
   if (f === 'picked') {
     const list = RECIPES.filter((r) => state.counts[r.id]);
     html = list.length ? group('えらび中', 'picked', list) : '<p class="muted tb-empty">まだ献立をえらんでいません。「すべて」から「＋」で選べます。</p>';
+  } else if (f === 'fav') {
+    const list = RECIPES.filter((r) => state.favs[r.id]);
+    html = list.length ? group('★ お気に入り', 'fav', list) : '<p class="muted tb-empty">お気に入りはまだありません。よく作る献立のカードの ☆ を押すと、ここにまとまります。</p>';
+  } else if (f === 'often') {
+    const m = state.madeCache;
+    const list = RECIPES.filter((r) => m[r.id]).sort((a, b) => m[b.id] - m[a.id]);
+    html = list.length ? group('よく作る献立（作った回数順）', 'often', list) : '<p class="muted tb-empty">まだ記録がありません。「買った！記録する」を押すと、作った献立がここに回数順で並びます。</p>';
   } else {
     const mine = RECIPES.filter((r) => r.custom);
+    if (f === 'all') html += group('★ お気に入り', 'fav', RECIPES.filter((r) => state.favs[r.id]));
     if (f === 'all' || f === 'mine') html += group('じぶんの献立', 'mine', mine);
     if (f !== 'mine') html += TAG_ORDER.filter((t) => f === 'all' || f === t).map((t) => group(t, t, RECIPES.filter((r) => r.tag === t && !r.custom))).join('');
   }
@@ -407,12 +448,38 @@ function planLabel(p) {
   return p.stores.map((id) => storeById(id).name).join(' → ');
 }
 
+// 最近の献立（記録した献立を、そのままもう一度えらべる）
+function recentMenusHtml() {
+  const seen = new Set();
+  const list = (state.menuLog || []).filter((m) => {
+    const key = Object.keys(m.counts).sort().join(',');
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return Object.keys(m.counts).every((id) => RECIPES.find((r) => r.id === id));
+  }).slice(0, 3);
+  if (!list.length) return '';
+  return `<div class="recent">
+    <p class="recent-title">最近の献立 <span class="muted small">そのままもう一度えらべます</span></p>
+    <div class="recent-list">${list.map((m) => {
+      const d = new Date(m.at);
+      const i = state.menuLog.indexOf(m);
+      const names = Object.entries(m.counts).map(([id, c]) => esc(RECIPES.find((r) => r.id === id).name) + (c > 1 ? '×' + c : ''));
+      const n = Object.values(m.counts).reduce((a, b) => a + b, 0);
+      return `<button class="recent-card" data-action="reuse-menu" data-i="${i}">
+        <span class="rc-date">${d.getMonth() + 1}/${d.getDate()}<small>${n}食分</small></span>
+        <span class="rc-names">${names.join('、')}</span>
+        <span class="rc-go">もう一度えらぶ</span>
+      </button>`;
+    }).join('')}</div>
+  </div>`;
+}
+
 function renderPicked() {
   const box = $('#picked');
   const chosen = RECIPES.filter((r) => state.counts[r.id]);
   if (!chosen.length) {
     const fromHome = Object.keys(state.pantry).length ? suggestions(restList([]), true) : [];
-    box.innerHTML = `<div class="start-card">
+    box.innerHTML = `${recentMenusHtml()}<div class="start-card">
       <p>作りたい献立を「＋」でえらぶと、いちばん安い買い方を出します。</p>
       ${fromHome.length ? `<p class="lo-title">家にある食材を使える献立</p>
         <p class="start-chips">${fromHome.map((x) => `<button class="chip" data-action="inc" data-id="${x.r.id}">＋ ${esc(x.r.name)}<span class="muted small">${x.extra.length ? '' : '・買い足しなし'}</span></button>`).join('')}</p>` : ''}
@@ -800,6 +867,9 @@ function recordPurchase() {
     planned, actual, lines, skipped, restCount: Object.keys(pantry).length,
   };
   state.history.unshift(rec);
+  if (Object.keys(state.counts).length) {
+    state.menuLog = [{ at: d.toISOString(), counts: { ...state.counts } }, ...(state.menuLog || [])].slice(0, 50);
+  }
   state.pantry = pantry;
   state.bought = {};
   state.extras = [];
@@ -1488,6 +1558,14 @@ document.addEventListener('click', (e) => {
   }
   if (a === 'step') { goStep(Number(t.dataset.k)); return; }
   if (a === 'ptab') { goStep({ plan: 2, list: 3, rest: 2, home: 4 }[t.dataset.k] || 1); return; }
+  if (a === 'fav') {
+    if (state.favs[id]) delete state.favs[id]; else state.favs[id] = true;
+    save(); renderRecipes(); return;
+  }
+  if (a === 'reuse-menu') {
+    const m = state.menuLog[Number(t.dataset.i)];
+    if (m) { state.counts = {}; for (const [rid, c] of Object.entries(m.counts)) if (RECIPES.find((r) => r.id === rid)) state.counts[rid] = c; state.tagFilter = 'picked'; state.justRecorded = null; }
+  }
   if (a === 'tag-filter') { state.tagFilter = t.dataset.k; renderRecipes(); return; }
   if (a === 'tick') {
     if (state.bought[id]) delete state.bought[id];
