@@ -30,7 +30,13 @@ function applyArea() {
 }
 applyArea();
 const moveLabel = (s) => `家から${(TRANSPORTS[SETTINGS.transport] || TRANSPORTS.walk).label}で${s.minutes}分`;
-const shareLabel = () => SHARE_SCOPES[SETTINGS.shareScope] || SHARE_SCOPES.dorm;
+// わけあいの相手：登録した寮・大学（キャンパス）の名前で表示する
+const shareGroup = () => {
+  if (SETTINGS.shareScope === 'dorm') return (SETTINGS.shareDorm || '').trim();
+  if (SETTINGS.shareScope === 'univ') return (SETTINGS.shareCampus || '').trim();
+  return '';
+};
+const shareLabel = () => shareGroup() || SHARE_SCOPES[SETTINGS.shareScope] || SHARE_SCOPES.dorm;
 
 function defaultPrices() {
   const scale = currentArea().priceScale;
@@ -274,11 +280,17 @@ function suggestions(items, anyKeep = false) {
     .map((r) => {
       let score = 0;
       const extra = [];
+      const used = [];
       for (const [ing, q] of Object.entries(r.uses)) {
-        if (riskyIds.includes(ing) && left[ing] > 0) score += Math.min(1, left[ing] / q);
+        if (riskyIds.includes(ing) && left[ing] > 0) {
+          score += Math.min(1, left[ing] / q);
+          used.push({ id: ing, q: Math.min(left[ing], q) });
+        }
         if (!(left[ing] >= q - 1e-9)) extra.push(ing);
       }
-      return { r, score, extra };
+      // 使い切れる分の金額（ムダにならずにすむ分）
+      const saved = used.reduce((a, u) => a + (u.q / INGREDIENTS[u.id].pack) * (cheapestPrice(u.id) || 0), 0);
+      return { r, score, extra, used, saved };
     })
     .filter((c) => c.score >= 0.5)
     .sort((a, b) => b.score - a.score || a.extra.length - b.extra.length)
@@ -492,6 +504,7 @@ function renderPlanInner() {
   const items = all.filter((it) => it.packs > 0);
   const box = $('#plan');
   const listBox = $('#list');
+  $('#sugg-box').innerHTML = '';
   $('#recorded').innerHTML = state.justRecorded ? recordedBanner() : '';
   renderPantry();
 
@@ -841,9 +854,13 @@ function renderLeftover(items, all) {
   const box = $('#leftover');
   const shareable = items.filter((it) => it.canShare);
   const cheapestStore = (id) => STORES.filter((s) => priceOf(id, s.id) !== null).sort((a, b) => priceOf(id, a.id) - priceOf(id, b.id))[0];
+  const needProfile = SETTINGS.shareScope !== 'off' && !shareGroup();
   const shareBlock = shareable.length ? `<div class="share-block">
       <p class="lo-title">近くの人と「わけあい」で買う</p>
-      <p class="muted small">使い切れない分を、${shareLabel()}の利用者と分けて買えます。未開封のまま、買ったお店か学内で受け渡します。（範囲はアカウントで変更できます）</p>
+      ${needProfile ? `<div class="share-need">
+        <p class="small">わけあう相手を見つけるために、アカウントで${SETTINGS.shareScope === 'dorm' ? '住んでいる寮' : '大学・キャンパス'}を登録してください。同じ${SETTINGS.shareScope === 'dorm' ? '寮' : 'キャンパス'}の人とだけマッチングします。</p>
+        <button class="btn-soft" data-action="go-tab" data-k="account">登録する</button>
+      </div>` : `<p class="muted small">使い切れない分を、<b>${esc(shareLabel())}</b>の利用者と分けて買えます。未開封のまま受け渡します${SETTINGS.sharePlace ? `（受け渡し：${esc(SETTINGS.sharePlace)}）` : ''}。</p>`}
       <ul>${shareable.map((it) => {
         const ing = INGREDIENTS[it.id];
         const st = cheapestStore(it.id);
@@ -854,12 +871,35 @@ function renderLeftover(items, all) {
         return `<li class="${it.shared ? 'is-on' : ''}">
           <div>
             <b>${esc(ing.name)}</b> <span class="muted small">${esc(ing.packLabel)}${it.packs > 1 ? '×' + it.packs : ''}のうち ${fmtFrac(portion)} だけ</span>
-            <span class="small">${yen(full)} → <b>${yen(mine)}</b>　<span class="muted">${shareLabel()}で ${n}人 が希望（デモ）</span></span>
+            <span class="small">${yen(full)} → <b>${yen(mine)}</b>　<span class="muted">${needProfile ? '登録すると、わけあう相手を探せます' : `${esc(shareLabel())}で ${n}人 が希望（デモ）`}</span></span>
           </div>
-          <button class="${it.shared ? 'btn' : 'btn-soft'}" data-action="toggle-share" data-id="${it.id}">${it.shared ? 'わけあい中' : 'わけあう'}</button>
+          <button class="${it.shared ? 'btn' : 'btn-soft'}" data-action="toggle-share" data-id="${it.id}" ${needProfile && !it.shared ? 'disabled' : ''}>${it.shared ? 'わけあい中' : 'わけあう'}</button>
         </li>`;
       }).join('')}</ul>
     </div>` : '';
+
+  $('#sugg-box').innerHTML = sugg.length ? `<section class="sugg-hero" aria-labelledby="sugg-title">
+      <div class="sh-head">
+        <svg class="sh-icon" viewBox="0 0 48 48" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M8 24h32c0 9-7 16-16 16S8 33 8 24z" fill="#fdf3dc" stroke="#24323a" stroke-width="2"/>
+          <path d="M18 20c-2-5 1-9 4-11M26 20c0-4 3-8 7-9" stroke="#5fa77f" stroke-width="2.4"/>
+          <path d="M14 30c4 2 16 2 20 0" stroke="#24323a" stroke-width="1.4" opacity=".4"/>
+        </svg>
+        <div>
+          <p class="sh-kicker">使い切りのおすすめ</p>
+          <h3 id="sugg-title">残りを使い切るなら、この献立もどう？</h3>
+          <p class="small muted">このままだと ${info.risky.map((e) => esc(e.ing.name)).join('・') || '食材'} が余りそうです。足すと、ムダなく使い切れます。</p>
+        </div>
+      </div>
+      <div class="sh-list">${sugg.map((s) => `<div class="sh-card">
+        <div class="sh-main">
+          <p class="sh-name">${esc(s.r.name)}</p>
+          <p class="sh-uses">${s.used.map((u) => `<span class="lo-chip lo-short">${esc(INGREDIENTS[u.id].name)} ${fmtQty(u.id, u.q)}を使う</span>`).join('')}</p>
+          <p class="small muted">${s.extra.length ? '買い足し：' + s.extra.map((id) => INGREDIENTS[id].name).join('・') : '買い足しなしで作れます'}${s.saved >= 1 ? `<span class="sh-save">約${yen(s.saved)}分のムダを防げる</span>` : ''}</p>
+        </div>
+        <button class="btn sh-add" data-action="inc" data-id="${s.r.id}">＋ 足す</button>
+      </div>`).join('')}</div>
+    </section>` : '';
 
   if (!info.risky.length && !info.frozen.length && !info.keeps.length) {
     box.innerHTML = `<div class="done"><p>買った食材をちょうど使い切れる献立です。</p></div>${shareBlock}`;
@@ -871,13 +911,7 @@ function renderLeftover(items, all) {
       <p>${info.risky.map(chip).join('')}</p>
       <p class="muted small">このままだと約 <b>${yen(info.lossValue)}</b> 分が使い切れないかもしれません。</p>
     </div>` : `<div class="done"><p>日持ちしない食材は使い切れます。</p></div>`}
-    ${sugg.length ? `<div class="sugg">
-      <p class="lo-title">残りを使い切るなら、この献立もどう？</p>
-      <ul>${sugg.map((s) => `<li>
-        <div><b>${esc(s.r.name)}</b><span class="muted small">${s.extra.length ? '追加で ' + s.extra.map((id) => INGREDIENTS[id].name).join('・') + ' が必要' : '追加の買い物なし'}</span></div>
-        <button class="btn-soft" data-action="inc" data-id="${s.r.id}">足す</button>
-      </li>`).join('')}</ul>
-    </div>` : ''}
+    ${sugg.length ? '<p class="small sugg-pointer">↑ 上の「この献立もどう？」から足すと、残りを使い切れます。</p>' : ''}
     ${shareBlock || info.frozen.length || info.keeps.length ? `<details class="lo-more" id="lo-more" ${state.loMore ? 'open' : ''}>
       <summary>近くの人とわけあう・残りの保存のしかた</summary>
       ${shareBlock}
@@ -1341,8 +1375,19 @@ function renderAccount() {
       <label class="acc-label" for="acc-wage">寄り道の基準</label>
       <p class="acc-inline">1時間あたり <input id="acc-wage" type="number" min="0" step="50" value="${state.wage}"> 円以上おトクになるなら、2軒回る</p>
       <p class="muted small">例：12分よけいにかかって ¥200 安くなる → 1時間あたり ¥1,000。この金額より大きいときだけ寄り道をおすすめします。</p>
-      <p class="acc-label">わけあいの範囲</p>
+      <p class="acc-label">わけあう相手の範囲</p>
       <div class="acc-radios">${Object.entries(SHARE_SCOPES).map(([k, t]) => `<label><input type="radio" name="acc-share" data-acc-set="shareScope" value="${k}" ${SETTINGS.shareScope === k ? 'checked' : ''}>${t}</label>`).join('')}</div>
+      ${SETTINGS.shareScope !== 'off' ? `<div class="share-profile">
+        <label class="acc-label" for="acc-campus">大学・キャンパス${SETTINGS.shareScope === 'univ' ? '（必須）' : '（任意）'}</label>
+        <input id="acc-campus" type="text" maxlength="40" data-acc-text="shareCampus" value="${esc(SETTINGS.shareCampus || '')}" placeholder="例：〇〇大学 △△キャンパス">
+        <label class="acc-label" for="acc-dorm">住んでいる寮${SETTINGS.shareScope === 'dorm' ? '（必須）' : '（任意）'}</label>
+        <input id="acc-dorm" type="text" maxlength="40" data-acc-text="shareDorm" value="${esc(SETTINGS.shareDorm || '')}" placeholder="例：〇〇寮">
+        <label class="acc-label" for="acc-place">受け渡しの希望場所（任意）</label>
+        <input id="acc-place" type="text" maxlength="40" data-acc-text="sharePlace" value="${esc(SETTINGS.sharePlace || '')}" placeholder="例：学内の生協前、寮のロビー">
+        <p class="muted small">${SETTINGS.shareScope === 'dorm' ? '同じ寮' : '同じ大学・キャンパス'}を登録した人どうしでマッチングします。ほかの人に見えるのは、この名前と受け渡し場所だけです。</p>
+        ${SETTINGS.shareScope === 'dorm' && !(SETTINGS.shareDorm || '').trim() ? '<p class="small warn">「同じ寮」でわけあうには、寮を登録してください。</p>' : ''}
+        ${SETTINGS.shareScope === 'univ' && !(SETTINGS.shareCampus || '').trim() ? '<p class="small warn">「同じ大学（キャンパス）」でわけあうには、大学・キャンパスを登録してください。</p>' : ''}
+      </div>` : ''}
       <label class="acc-switch"><input type="checkbox" data-acc-set="offersOn" ${SETTINGS.offersOn ? 'checked' : ''}> お店からのおすすめ（値引き・取り置き）を受け取る</label>
     </section>
 
@@ -1531,7 +1576,13 @@ document.addEventListener('change', (e) => {
   if (el.dataset && el.dataset.acc) { state.acc[el.dataset.acc] = el.value; state.acc.locMsg = ''; renderAccount(); return; }
   if (el.dataset && el.dataset.accSet) {
     SETTINGS[el.dataset.accSet] = el.type === 'checkbox' ? el.checked : el.value;
-    save(); return;
+    save();
+    if (el.dataset.accSet === 'shareScope') renderAccount();
+    return;
+  }
+  if (el.dataset && el.dataset.accText) {
+    SETTINGS[el.dataset.accText] = el.value.replace(/[<>&"'`]/g, '').trim().slice(0, 40);
+    save(); renderAccount(); return;
   }
   if (el.id === 'rc-camera' || el.id === 'rc-photo') {
     const file = el.files && el.files[0];

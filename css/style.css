@@ -888,3 +888,34 @@ body.tu-open { overflow: hidden; }
 .tu-end { flex-wrap: nowrap; }
 .tu-end .btn { min-width: 0; }
 .tu-nav .btn-soft, .tu-nav .btn { padding-left: 14px; padding-right: 14px; }
+
+/* ---------- 使い切りのおすすめ（目立たせる） ---------- */
+.sugg-hero {
+  margin: 14px 0 6px; padding: 14px 16px 16px; border-radius: 18px;
+  background: linear-gradient(160deg, var(--mustard-wash) 0%, #fff 120%);
+  border: 2px solid var(--mustard); box-shadow: 0 6px 20px rgba(242, 184, 75, 0.22);
+}
+.sh-head { display: flex; gap: 12px; align-items: flex-start; }
+.sh-icon { width: 46px; height: 46px; flex: none; background: #fff; border-radius: 50%; padding: 4px; }
+.sh-kicker { margin: 0; font-size: 0.75rem; font-weight: 700; color: #b5780b; letter-spacing: 0.04em; }
+.sugg-hero h3 { margin: 0 0 2px; font-size: 1.08rem; }
+.sh-head .small { margin: 2px 0 0; }
+.sh-list { display: grid; gap: 8px; margin-top: 12px; }
+.sh-card { display: flex; align-items: center; gap: 10px; background: #fff; border-radius: 14px; padding: 10px 12px; box-shadow: var(--shadow); }
+.sh-main { flex: 1; min-width: 0; }
+.sh-name { margin: 0; font-weight: 700; font-size: 1rem; }
+.sh-uses { margin: 4px 0 2px; display: flex; flex-wrap: wrap; gap: 4px; }
+.sh-uses .lo-chip { margin: 0; font-size: 0.75rem; }
+.sh-main .small { margin: 0; }
+.sh-save { display: inline-block; margin-left: 6px; color: #3f8a60; font-weight: 700; }
+.sh-add { flex: none; background: #e9a23b; border-color: #e9a23b; padding: 9px 14px; }
+.sh-add:hover { background: #d48f27; border-color: #d48f27; }
+.sugg-pointer { color: #b5780b; margin: 6px 2px 0; }
+
+/* ---------- わけあいの相手 ---------- */
+.share-need { background: #fff; border-radius: 12px; padding: 8px 12px; margin: 6px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.share-need p { margin: 0; flex: 1 1 220px; }
+.share-profile { display: grid; gap: 4px; background: var(--paper); border-radius: 12px; padding: 10px 12px; }
+.share-profile input { width: 100%; }
+.btn-soft:disabled { opacity: 0.4; cursor: default; }
+.share-block li button { white-space: nowrap; flex: none; }

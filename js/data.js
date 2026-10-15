@@ -181,6 +181,6 @@ const TRANSPORTS = {
 
 const SHARE_SCOPES = {
   dorm: '同じ寮',
-  univ: '同じ大学',
+  univ: '同じ大学（キャンパス）',
   off: '使わない',
 };
