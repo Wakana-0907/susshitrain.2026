@@ -857,3 +857,34 @@ input[type=text], input[type=number], input[type=email], input[type=password], s
 .rc-bar span { display: block; height: 100%; background: var(--primary); border-radius: 999px; transition: width 0.2s; }
 .rc-manual summary { cursor: pointer; color: var(--ink-soft); padding: 4px 0; }
 .rc-manual[open] summary { margin-bottom: 4px; }
+
+/* ---------- チュートリアル ---------- */
+#tutorial { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; }
+#tutorial[hidden] { display: none; }
+body.tu-open { overflow: hidden; }
+.tu-back { position: absolute; inset: 0; background: rgba(36, 50, 58, 0.45); backdrop-filter: blur(2px); }
+.tu-card {
+  position: relative; width: 100%; max-width: 400px; max-height: calc(100vh - 32px); overflow-y: auto;
+  background: var(--card); border-radius: 20px; padding: 16px 20px 18px; box-shadow: 0 12px 40px rgba(36, 50, 58, 0.25);
+}
+.tu-card.tu-anim { animation: tu-in 0.22s ease-out; }
+@keyframes tu-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tu-card.tu-anim { animation: none; } }
+.tu-top { display: flex; justify-content: space-between; align-items: center; }
+.tu-count { font-size: 0.78rem; color: var(--ink-soft); font-weight: 700; }
+.tu-skip { border: 0; background: none; color: var(--ink-soft); font-size: 0.85rem; padding: 4px 6px; text-decoration: underline; text-underline-offset: 3px; }
+.tu-art { background: var(--paper); border-radius: 14px; margin: 8px 0 12px; padding: 10px; }
+.tu-art svg { display: block; width: 100%; height: auto; max-height: 180px; font-family: 'Zen Maru Gothic', sans-serif; }
+.tu-step { margin: 0; font-size: 0.78rem; font-weight: 700; color: var(--primary); }
+.tu-card h2 { font-size: 1.2rem; margin: 2px 0 6px; }
+.tu-text { font-size: 0.92rem; line-height: 1.75; margin: 0; min-height: 5.2em; }
+.tu-dots { display: flex; justify-content: center; gap: 6px; margin: 14px 0 12px; }
+.tu-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--line); transition: width 0.2s; }
+.tu-dots span.is-on { width: 20px; border-radius: 4px; background: var(--primary); }
+.tu-nav { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tu-nav .btn { min-width: 110px; }
+.tu-end { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.tu-nav button { white-space: nowrap; }
+.tu-end { flex-wrap: nowrap; }
+.tu-end .btn { min-width: 0; }
+.tu-nav .btn-soft, .tu-nav .btn { padding-left: 14px; padding-right: 14px; }

@@ -1347,6 +1347,12 @@ function renderAccount() {
     </section>
 
     <section class="acc-card">
+      <h3>使い方</h3>
+      <p class="muted small">はじめに表示された使い方の説明を、もう一度見られます。</p>
+      <button class="btn-soft" data-action="open-tutorial">使い方（チュートリアル）を見る</button>
+    </section>
+
+    <section class="acc-card">
       <h3>データ</h3>
       <p class="small">買い物の記録 <b>${state.history.length}</b>件・家にある食材 <b>${Object.keys(state.pantry).length}</b>品・じぶんの献立 <b>${customRecipes.length}</b>品</p>
       <p class="muted small">デモ版のため、記録はこの端末のブラウザの中だけに保存されています。</p>
@@ -1404,6 +1410,7 @@ document.addEventListener('click', (e) => {
   if (a === 'form-save') { saveForm(); return; }
   if (a === 'del-recipe') deleteRecipe(id);
   if (a === 'logout') { logout(); return; }
+  if (a === 'open-tutorial') { TUTORIAL.open(); return; }
   if (a === 'guest-signup') { AUTH.set('kd-auth-from-guest', true); AUTH.set('kd-auth-mode', 'signup'); logout(); return; }
   if (a === 'acc-save-name') {
     const name = $('#acc-name').value.replace(/[<>&"'`]/g, '').trim().slice(0, 20);
