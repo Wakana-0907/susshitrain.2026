@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261019h">
+  <link rel="stylesheet" href="css/style.css?v=20261019i">
 </head>
 <body>
   <!-- 水彩のにじみ（背景） -->
@@ -87,6 +87,10 @@
       <div id="store-view"></div>
     </section>
 
+    <section id="view-trend" class="view" hidden>
+      <div id="trend-view"></div>
+    </section>
+
     <section id="view-history" class="view" hidden>
       <div class="step-head"><h2>買い物のきろく <span class="muted small">実際に買ったもの・払った金額</span></h2></div>
       <div id="history-view"></div>
@@ -109,6 +113,7 @@
     <button class="tab" data-tab="history"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h9.5l3 3v14H6z"/><path d="M15.5 3.5v3h3"/><path d="M9 11h6M9 14.5h6M9 18h3.5"/></svg><span class="bn-label">きろく</span></button>
     <button class="tab" data-tab="prices"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1.5 1.5 0 0 1 0 2.1l-6.1 6.1a1.5 1.5 0 0 1-2.1 0z"/><circle cx="8.2" cy="8.2" r="1.4"/></svg><span class="bn-label">価格メモ</span></button>
     <button class="tab" data-tab="store"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5V20h16V9.5"/><path d="M3 9.5l1.6-5h14.8l1.6 5a2.5 2.5 0 0 1-4.5 1.4 2.5 2.5 0 0 1-4.5 0 2.5 2.5 0 0 1-4.5 0A2.5 2.5 0 0 1 3 9.5z"/><path d="M10 20v-5h4v5"/></svg><span class="bn-label">お店</span></button>
+    <button class="tab" data-tab="trend"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5h16"/><path d="M6.5 16v-4M11 16V8.5M15.5 16v-6M20 16V5"/><path d="M5 9l5-4 4 3 5-4"/></svg><span class="bn-label">売れ筋</span></button>
     <button class="tab tab-acc" data-tab="account" id="acc-tab" aria-label="アカウント"><span class="avatar">?</span><span class="bn-label">アカウント</span></button>
   </nav>
 
@@ -121,12 +126,12 @@
   <div id="tutorial" hidden></div>
   <div id="live" hidden></div>
 
-  <script src="js/data.js?v=20261019h"></script>
-  <script src="js/nearby.js?v=20261019h"></script>
-  <script src="js/auth.js?v=20261019h"></script>
-  <script src="js/receipt-ocr.js?v=20261019h"></script>
-  <script src="js/app.js?v=20261019h"></script>
-  <script src="js/live.js?v=20261019h"></script>
-  <script src="js/tutorial.js?v=20261019h"></script>
+  <script src="js/data.js?v=20261019i"></script>
+  <script src="js/nearby.js?v=20261019i"></script>
+  <script src="js/auth.js?v=20261019i"></script>
+  <script src="js/receipt-ocr.js?v=20261019i"></script>
+  <script src="js/app.js?v=20261019i"></script>
+  <script src="js/live.js?v=20261019i"></script>
+  <script src="js/tutorial.js?v=20261019i"></script>
 </body>
 </html>

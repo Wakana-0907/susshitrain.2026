@@ -20,7 +20,7 @@ const SETTINGS = Object.assign({ area: AREAS[0].id, transport: 'walk', shareScop
 // お店のアカウントは、登録した店舗のエリアに固定する
 if (IS_STORE && MY_STORE) { SETTINGS.area = MY_STORE.area; SETTINGS.liveArea = null; SETTINGS.transport = 'walk'; }
 // 見られる画面：お店のアカウントは「お店」と「アカウント」だけ。一般・ゲストには「お店」を見せない
-const ALLOWED_TABS = IS_STORE ? (MY_STORE ? ['store', 'account'] : ['account']) : ['shop', 'history', 'prices', 'account'];
+const ALLOWED_TABS = IS_STORE ? (MY_STORE ? ['store', 'trend', 'account'] : ['account']) : ['shop', 'history', 'prices', 'account'];
 // お店からの配信は、端末の中の全アカウントで共有する（エリアごと）
 const SHARED_OFFERS = {
   get: (area) => (AUTH.get('kd-shared-offers', {})[area] || []).map((o, i) => (o.id ? o : Object.assign(o, { id: `o${i}${o.store}${o.ing}` }))),
@@ -1182,7 +1182,6 @@ function renderStore() {
   $('#store-view').innerHTML = `${welcome}
     ${typeof storeLivePanel === 'function' ? storeLivePanel() : ''}
     ${MY_STORE ? `<div class="store-title" style="--store:${s.color}"><span class="dot"></span><b>${esc(MY_STORE.name)}</b><span class="muted small">${esc(currentArea().name)}</span></div>` : ''}
-    ${todayTrendHtml(sid)}
     <div class="kpis">
       <div class="kpi"><span class="muted small">明日来店しそうな献立登録者</span><span class="mid num">${users.toLocaleString()}<small>人</small></span></div>
       <div class="kpi"><span class="muted small">売れ残り見込み</span><span class="mid num">${yen(lossAfter)}</span>${lossAfter < lossBefore ? `<span class="small good">配信前 ${yen(lossBefore)} から減少</span>` : ''}</div>
@@ -1816,6 +1815,7 @@ function render() {
   if (state.tab === 'shop') renderMbar();
   if (state.tab === 'shop') { if (typeof renderLiveRow === 'function') renderLiveRow(); renderOffers(); renderRecipes(); renderPicked(); renderPlan(); }
   if (state.tab === 'store') renderStore();
+  if (state.tab === 'trend') $('#trend-view').innerHTML = todayTrendHtml(state.viewStore);
   if (state.tab === 'prices') renderPrices();
   if (state.tab === 'history') renderHistory();
   if (state.tab === 'account') renderAccount();
@@ -1902,7 +1902,7 @@ document.addEventListener('click', (e) => {
     const m = state.menuLog[Number(t.dataset.i)];
     if (m) { state.counts = {}; for (const [rid, c] of Object.entries(m.counts)) if (RECIPES.find((r) => r.id === rid)) state.counts[rid] = c; state.tagFilter = 'picked'; state.justRecorded = null; }
   }
-  if (a === 'trend-tab') { state.trendTab = t.dataset.k; renderStore(); return; }
+  if (a === 'trend-tab') { state.trendTab = t.dataset.k; render(); return; }
   if (a === 'tag-filter') { state.tagFilter = t.dataset.k; renderRecipes(); return; }
   if (a === 'tick') {
     if (state.bought[id]) delete state.bought[id];
