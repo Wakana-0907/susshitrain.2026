@@ -41,6 +41,24 @@ function fmtUntil(iso) {
 const offerLive = (o) => o.status !== 'ended' && (!o.until || Date.now() < new Date(o.until).getTime());
 const offerTaken = (o, h) => (o.reservations || []).filter((r) => h === undefined || r.h === h).length;
 const myReservation = (o) => (o.reservations || []).find((r) => r.uid === AUTH.user.id);
+// 受け取りコード：取り置きした人だけに出る4桁の番号。受け取る日だけ使える
+const dayStr = (d) => { const x = d ? new Date(d) : new Date(); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+function pickupDay(h) { const d = new Date(); if (d.getHours() >= h + 1) d.setDate(d.getDate() + 1); return dayStr(d); }
+function fmtDay(ds) {
+  const [y, m, d] = ds.split('-').map(Number);
+  const diff = Math.round((new Date(y, m - 1, d) - new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())) / 864e5);
+  return `${m}/${d}${diff === 0 ? '（今日）' : diff === 1 ? '（明日）' : ''}`;
+}
+function newPickupCode(o) {
+  const used = new Set((o.reservations || []).map((r) => r.code));
+  for (let i = 0; i < 50; i++) {
+    const r = new Uint16Array(1);
+    try { crypto.getRandomValues(r); } catch (e) { r[0] = Math.floor(Math.random() * 65535); }
+    const c = String(1000 + (r[0] % 9000));
+    if (!used.has(c)) return c;
+  }
+  return String(1000 + Math.floor(Math.random() * 9000));
+}
 // 共有の配信データを読みなおしてから書きかえる（ほかの人の取り置きを消さないように）
 function mutateOffers(fn) {
   const list = SHARED_OFFERS.get(SETTINGS.area);
@@ -475,7 +493,16 @@ function renderOffers() {
 // 取り置き：人によって配信する時間帯を分ける（混雑を避ける）。埋まっていたら空いている時間帯を案内
 function offerSlotHtml(o) {
   const mine = myReservation(o);
-  if (mine) return `<p class="offer-slot small"><span class="tag-share">取り置き済み（${mine.h}時台に受け取り）</span> <button class="link small" data-action="reserve" data-id="${o.id}">取り消す</button></p>`;
+  if (mine) {
+    if (mine.picked) return `<p class="offer-slot small"><span class="tag-share">受け取り済み</span><span class="muted">ありがとうございました</span></p>`;
+    const expired = mine.day && mine.day < dayStr();
+    return `<div class="pickup ${expired ? 'is-expired' : ''}">
+      <p class="small"><span class="tag-share">取り置き済み</span> ${fmtDay(mine.day || dayStr())} ${mine.h}時台に受け取り</p>
+      ${mine.code ? `<p class="pickup-code" aria-label="受け取りコード">${mine.code.split('').map((c) => `<span>${c}</span>`).join('')}</p>
+      <p class="muted small">${expired ? 'このコードの期限は過ぎました。' : `レジでこの番号を伝えてください。${fmtDay(mine.day || dayStr())}だけ使えます。ほかの人には見えません。`}</p>` : ''}
+      <button class="link small" data-action="reserve" data-id="${o.id}">取り置きを取り消す</button>
+    </div>`;
+  }
   const seed = [...(AUTH.user.id + o.ing)].reduce((a, c) => a + c.charCodeAt(0), 0);
   const mySlot = o.slots[seed % o.slots.length];
   const left = (sl) => sl.limit - offerTaken(o, sl.h);
@@ -1140,9 +1167,14 @@ function storeOfferCard(r, sid) {
       ${head}
       <p class="small"><span class="live-dot"></span><b>配信中</b>　<span class="off">${Math.round(live.discount * 100)}%オフ</span>　<span class="muted">${fmtUntil(live.until)}</span></p>
       ${live.message ? `<p class="offer-msg small">「${esc(live.message)}」</p>` : ''}
-      <p class="small">取り置き <b>${taken}</b> / ${live.qty}個</p>
+      <p class="small">取り置き <b>${taken}</b> / ${live.qty}個　<span class="muted">受け取り済み ${(live.reservations || []).filter((x) => x.picked).length}個</span></p>
       <div class="take-bar"><span style="width:${Math.min(100, (taken / Math.max(1, live.qty)) * 100)}%"></span></div>
       <p class="small slot-line">${live.slots.map((x) => { const n = offerTaken(live, x.h); return `<span class="slot ${n >= x.limit ? 'is-full' : ''}">${x.h}時台 ${n}/${x.limit}${n >= x.limit ? ' 満' : ''}</span>`; }).join('')}</p>
+      <div class="pickup-check">
+        <label class="acc-label" for="pc-${live.id}">受け取りの確認 <span class="muted small">お客さんの4桁のコードを入力</span></label>
+        <div class="acc-inline"><input id="pc-${live.id}" class="pc-input" type="text" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off"><button class="btn" data-action="offer-pickup" data-id="${live.id}">確認</button></div>
+        ${state.pickupMsg && state.pickupMsg.id === live.id ? `<p class="small ${state.pickupMsg.ok ? 'good' : 'warn'}">${esc(state.pickupMsg.text)}</p>` : ''}
+      </div>
       <button class="btn-soft" data-action="offer-stop" data-id="${live.id}">${state.confirmStop === live.id ? 'もう一度押すと配信を止めます' : '配信を止める'}</button>
     </div>`;
   }
@@ -1850,7 +1882,7 @@ document.addEventListener('click', (e) => {
       if (mine >= 0) { o.reservations.splice(mine, 1); return; }
       const h = Number(t.dataset.h), sl = o.slots.find((x) => x.h === h);
       if (!sl || offerTaken(o, h) >= sl.limit) { state.reserveMsg = 'ちょうど埋まってしまいました。ほかの時間帯を見てください。'; return; }
-      o.reservations.push({ uid: AUTH.user.id, h, at: new Date().toISOString() });
+      o.reservations.push({ uid: AUTH.user.id, h, at: new Date().toISOString(), code: newPickupCode(o), day: pickupDay(h) });
     });
   }
   if (a === 'receipt-sample') { state.receipt.store = 'B'; state.receipt.text = SAMPLE_RECEIPT; state.receipt.result = null; }
@@ -1867,6 +1899,22 @@ document.addEventListener('click', (e) => {
     if (a === 'offer-draft') { const r = storeDemand(sid).find((x) => x.id === t.dataset.ing); if (r) state.draft = newDraft(r, sid); }
     if (a === 'offer-cancel') state.draft = null;
     if (a === 'dr-discount' && state.draft) state.draft.discount = Number(t.dataset.v);
+    if (a === 'offer-pickup') {
+      const inp = $('#pc-' + id), code = (inp ? inp.value : '').replace(/\D/g, '');
+      const result = mutateOffers((list) => {
+        const o = list.find((x) => x.id === id);
+        if (!o) return { ok: false, text: '配信が見つかりません。' };
+        if (code.length !== 4) return { ok: false, text: '4桁の数字を入れてください。' };
+        const r = (o.reservations || []).find((x) => x.code === code);
+        if (!r) return { ok: false, text: `${code} の取り置きはありません。` };
+        if (r.picked) return { ok: false, text: `${code} はもう受け取り済みです。` };
+        if (r.day && r.day !== dayStr()) return { ok: false, text: `${code} は ${fmtDay(r.day)} に使うコードです。` };
+        r.picked = true; r.pickedAt = new Date().toISOString();
+        return { ok: true, text: `OK：${code}（${r.h}時台の取り置き）を受け取り済みにしました。${INGREDIENTS[o.ing].name}を渡してください。` };
+      });
+      state.pickupMsg = Object.assign({ id }, result);
+      renderStore(); return;
+    }
     if (a === 'offer-stop') {
       if (state.confirmStop !== id) { state.confirmStop = id; renderStore(); return; }
       state.confirmStop = null;

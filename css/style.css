@@ -1060,3 +1060,14 @@ body.lv-open { overflow: hidden; }
 .lv-cam-msg { color: #a4512f; }
 .lv-ended { position: absolute; inset: 0; background: rgba(0,0,0,.7); display: grid; place-content: center; justify-items: center; gap: 10px; z-index: 5; }
 #live[hidden] { display: none; }
+
+/* ---------- 受け取りコード ---------- */
+.pickup { display: grid; gap: 4px; background: #fff; border: 1.5px dashed var(--primary); border-radius: 12px; padding: 8px 12px; margin: 4px 0; justify-items: start; }
+.pickup p { margin: 0; }
+.pickup-code { display: flex; gap: 6px; }
+.pickup-code span { width: 40px; height: 48px; display: grid; place-items: center; background: var(--primary-wash); color: var(--primary-dark); border-radius: 10px; font: 700 1.6rem ui-monospace, Menlo, monospace; }
+.pickup.is-expired .pickup-code span { opacity: .4; text-decoration: line-through; }
+.pickup-check { display: grid; gap: 4px; margin: 6px 0; }
+.pc-input { width: 96px; font: 700 1.2rem ui-monospace, Menlo, monospace; letter-spacing: .3em; text-align: center; padding: 4px 6px; border: 1px solid var(--line); border-radius: 10px; }
+.lv-pin .pickup { background: transparent; border-style: solid; padding: 6px 10px; }
+.lv-pin .pickup-code span { width: 34px; height: 40px; font-size: 1.3rem; }
