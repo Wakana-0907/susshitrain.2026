@@ -943,3 +943,22 @@ body.tu-open { overflow: hidden; }
 .rc-date small { margin-left: 6px; color: var(--ink-soft); font-weight: 400; }
 .rc-names { font-size: 0.82rem; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .rc-go { font-size: 0.76rem; color: var(--primary); font-weight: 700; margin-top: auto; }
+
+/* ---------- お店・企業のアカウント ---------- */
+.bnav { display: flex; }
+.bnav .tab { flex: 1 1 0; min-width: 0; }
+.bnav .tab[hidden] { display: none; }
+.au-tabs3 button { font-size: 0.84rem; padding: 7px 4px; }
+.au-sub { color: var(--ink-soft); font-size: 0.8rem; margin: 2px 0 0; }
+.au-code { text-transform: uppercase; letter-spacing: 0.25em; font-family: ui-monospace, Menlo, monospace; }
+.au-store-link { display: block; margin: 14px auto 0; color: var(--primary-dark); font-size: 0.85rem; }
+.store-title { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 1.05rem; }
+.store-title .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--store); }
+.store-welcome { background: var(--primary-wash); border: 1.5px solid var(--primary); border-radius: var(--r1); padding: 14px 18px; margin-bottom: 14px; display: grid; gap: 6px; justify-items: start; }
+.store-welcome p { margin: 0; }
+.store-code-big, .store-code { font-family: ui-monospace, Menlo, monospace; letter-spacing: 0.25em; font-weight: 700; color: var(--primary-dark); }
+.store-code-big { font-size: 1.8rem; }
+.store-code { font-size: 1.3rem; }
+.store-members { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.store-members li { display: flex; align-items: center; gap: 8px; }
+.store-members .avatar { width: 26px; height: 26px; display: inline-grid; place-items: center; font-size: 0.8rem; }

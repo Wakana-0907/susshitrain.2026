@@ -187,6 +187,6 @@ const TUTORIAL = (() => {
 })();
 
 // 初めてログインしたとき（ゲストも）に自動で表示
-if (AUTH.user && !LS.get('kd-tutorial-done', false)) {
+if (AUTH.user && !IS_STORE && !LS.get('kd-tutorial-done', false)) {
   setTimeout(() => TUTORIAL.open(), 300);
 }

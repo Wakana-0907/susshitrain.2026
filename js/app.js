@@ -17,6 +17,15 @@ const LS = {
 
 // ---------- アカウントの設定（場所・移動手段など） ----------
 const SETTINGS = Object.assign({ area: AREAS[0].id, transport: 'walk', shareScope: 'dorm', offersOn: true, liveArea: null }, LS.get('kd-settings', {}));
+// お店のアカウントは、登録した店舗のエリアに固定する
+if (IS_STORE && MY_STORE) { SETTINGS.area = MY_STORE.area; SETTINGS.liveArea = null; SETTINGS.transport = 'walk'; }
+// 見られる画面：お店のアカウントは「お店」と「アカウント」だけ。一般・ゲストには「お店」を見せない
+const ALLOWED_TABS = IS_STORE ? (MY_STORE ? ['store', 'account'] : ['account']) : ['shop', 'history', 'prices', 'account'];
+// お店からの配信は、端末の中の全アカウントで共有する（エリアごと）
+const SHARED_OFFERS = {
+  get: (area) => (AUTH.get('kd-shared-offers', {})[area] || []),
+  set(area, list) { const all = AUTH.get('kd-shared-offers', {}); all[area] = list; AUTH.set('kd-shared-offers', all); },
+};
 const allAreas = (extra) => {
   const live = extra || SETTINGS.liveArea;
   return live ? [live, ...AREAS] : AREAS;
@@ -62,12 +71,12 @@ customRecipes.forEach((r) => RECIPES.push(r));
 const emptyForm = () => ({ open: false, name: '', tag: '主菜', rows: [{ id: '', qty: '' }], pending: {}, status: '', busy: false });
 
 const state = {
-  tab: 'shop',
+  tab: ALLOWED_TABS[0],
   counts: LS.get('kd-counts', {}),
   prices: Object.assign(defaultPrices(), LS.get('kd-prices', {})),
   wage: LS.get('kd-wage', 800),
-  offers: LS.get('kd-offers', []),
-  viewStore: 'A',
+  offers: SHARED_OFFERS.get(SETTINGS.area),
+  viewStore: MY_STORE ? MY_STORE.slot : 'A',
   ai: Object.assign({ key: '', model: 'claude-haiku-4-5' }, LS.get('kd-ai', {})),
   shares: LS.get('kd-shares', {}),
   reserved: LS.get('kd-reserved', {}),
@@ -110,7 +119,6 @@ function save() {
   LS.set('kd-counts', state.counts);
   LS.set('kd-prices', state.prices);
   LS.set('kd-wage', state.wage);
-  LS.set('kd-offers', state.offers);
   LS.set('kd-ings', customIngs);
   LS.set('kd-recipes', customRecipes);
   LS.set('kd-ai', state.ai);
@@ -1028,10 +1036,14 @@ function renderStore() {
 
   const label = { ok: 'ちょうど', short: '足りない', risk: '売れ残りそう', extra: '多め（日持ちOK）' };
 
-  $('#store-view').innerHTML = `
-    <div class="store-switch">
-      ${STORES.map((x) => `<button class="pill ${x.id === sid ? 'is-on' : ''}" data-action="view-store" data-id="${x.id}" style="--store:${x.color}">${x.name}</button>`).join('')}
-    </div>
+  const welcome = MY_STORE && !AUTH.user.staff && LS.get('kd-store-welcome', false) ? `<div class="store-welcome">
+      <p><b>${esc(MY_STORE.name)}</b> の店舗アカウントを作りました。</p>
+      <p class="small">いっしょに使うスタッフには、この店舗コードを伝えてください。スタッフはコードと名前だけで入れます（メールアドレスはいりません）。</p>
+      <p class="store-code-big">${esc(MY_STORE.code)}</p>
+      <button class="btn-soft" data-action="store-welcome-close">わかった</button>
+    </div>` : '';
+  $('#store-view').innerHTML = `${welcome}
+    ${MY_STORE ? `<div class="store-title" style="--store:${s.color}"><span class="dot"></span><b>${esc(MY_STORE.name)}</b><span class="muted small">${esc(currentArea().name)}</span></div>` : ''}
     <div class="kpis">
       <div class="kpi"><span class="muted small">明日来店しそうな献立登録者</span><span class="mid num">${users.toLocaleString()}<small>人</small></span></div>
       <div class="kpi"><span class="muted small">売れ残り見込み</span><span class="mid num">${yen(lossAfter)}</span>${lossAfter < lossBefore ? `<span class="small good">配信前 ${yen(lossBefore)} から減少</span>` : ''}</div>
@@ -1403,7 +1415,47 @@ function deleteRecipe(id) {
 
 // ---------- アカウント ----------
 
+function renderStoreAccount() {
+  const u = AUTH.user;
+  const accs = AUTH.accounts();
+  const created = u.createdAt ? new Date(u.createdAt) : null;
+  const areaName = MY_STORE ? ((AREAS.find((x) => x.id === MY_STORE.area) || {}).name || '') : '';
+  $('#account-view').innerHTML = `<div class="acc-grid">
+    <section class="acc-card">
+      <h3>店舗</h3>
+      ${MY_STORE ? `<p><b>${esc(MY_STORE.name)}</b> <span class="muted small">${esc(areaName)}</span></p>
+        ${u.staff ? '<p class="muted small">店舗コードは、担当者だけが確認・変更できます。わからないときは担当者に聞いてください。</p>' : `<p class="acc-label">店舗コード</p>
+        <div class="acc-inline"><span class="store-code">${esc(MY_STORE.code)}</span><button class="link small" data-action="store-copy-code">${state.copied ? 'コピーしました' : 'コピー'}</button></div>
+        <p class="muted small">スタッフはこのコードと名前で入ります。担当者も、スタッフがいるときはログインにこのコードが必要です。いっしょに使う人にだけ伝えてください。</p>
+        <button class="btn-soft" data-action="store-new-code">${state.confirmAcc === 'code' ? 'もう一度押すと作りなおします' : 'コードを作りなおす'}</button>
+        ${state.confirmAcc === 'code' ? '<p class="small warn">作りなおすと、前のコードではログインできなくなります。</p>' : ''}`}`
+        : '<p class="small warn">店舗の登録が見つかりません。ログアウトして、もう一度登録してください。</p>'}
+    </section>
+
+    ${MY_STORE ? `<section class="acc-card">
+      <h3>この店舗を使っている人 <span class="muted small">${MY_STORE.members.length}人</span></h3>
+      <ul class="store-members">${MY_STORE.members.map((m) => `<li><span class="avatar">${esc(((accs[m] || {}).name || '?').slice(0, 1))}</span>${esc((accs[m] || {}).name || '（削除済み）')} <span class="muted small">${(accs[m] || {}).staff ? 'スタッフ' : '担当者'}${m === u.id ? '・あなた' : ''}</span></li>`).join('')}</ul>
+      <p class="muted small">スタッフは、ログイン画面の「お店・企業の方はこちら」→「スタッフ」から、店舗コードと名前だけで入れます（メールアドレスはいりません）。</p>
+    </section>` : ''}
+
+    <section class="acc-card">
+      <h3>${u.staff ? 'スタッフ' : '担当者'}</h3>
+      <div class="acc-row"><span class="avatar big-av">${esc((u.name || '?').slice(0, 1))}</span>
+        <div><label class="acc-label" for="acc-name">名前</label><input id="acc-name" type="text" maxlength="20" value="${esc(u.name)}"></div></div>
+      ${u.email ? `<p class="small"><span class="muted">メールアドレス</span>　${esc(u.email)}</p>` : '<p class="muted small">次からも、店舗コードとこの名前で入れます。</p>'}
+      ${created ? `<p class="small"><span class="muted">登録日</span>　${created.getFullYear()}/${created.getMonth() + 1}/${created.getDate()}</p>` : ''}
+      <button class="btn-soft" data-action="acc-save-name">名前を保存</button>
+      <div class="acc-actions">
+        <button class="btn-soft" data-action="logout">ログアウト</button>
+        <button class="btn-soft danger" data-action="acc-delete">${state.confirmAcc === 'delete' ? 'もう一度押すと削除します' : 'アカウントを削除'}</button>
+      </div>
+      ${MY_STORE && MY_STORE.members.length === 1 ? '<p class="muted small">最後の1人が削除すると、店舗の登録と配信も消えます。</p>' : ''}
+    </section>
+  </div>`;
+}
+
 function renderAccount() {
+  if (IS_STORE) { renderStoreAccount(); return; }
   const u = AUTH.user;
   const area = currentArea();
   const created = u.createdAt ? new Date(u.createdAt) : null;
@@ -1484,6 +1536,7 @@ function renderUserChip() {
   const u = AUTH.user;
   if (!u) return;
   $('#acc-tab').innerHTML = `<span class="avatar">${esc((u.name || '?').slice(0, 1))}</span><span class="bn-label">${u.guest ? 'ゲスト' : 'アカウント'}</span>`;
+  if (IS_STORE) { $('#area-chip').innerHTML = `<span class="area-chip">店舗アカウント${MY_STORE ? '・' + esc(MY_STORE.name) : ''}</span>`; return; }
   $('#area-chip').innerHTML = `<button class="area-chip" data-action="go-tab" data-k="account" title="場所を変える"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M8 14.5c-.3 0-4.6-4.6-4.6-8a4.6 4.6 0 0 1 9.2 0c0 3.4-4.3 8-4.6 8z"/><circle cx="8" cy="6.4" r="1.6"/></svg>${esc(currentArea().name)}・${(TRANSPORTS[SETTINGS.transport] || TRANSPORTS.walk).label}</button>`;
 }
 
@@ -1495,6 +1548,9 @@ function logout() {
 // ---------- 全体 ----------
 
 function render() {
+  if (!ALLOWED_TABS.includes(state.tab)) state.tab = ALLOWED_TABS[0];
+  document.querySelectorAll('.bnav .tab').forEach((t) => { t.hidden = !ALLOWED_TABS.includes(t.dataset.tab); });
+  document.body.classList.toggle('is-store', IS_STORE);
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('is-on', t.dataset.tab === state.tab));
   document.querySelectorAll('.view').forEach((v) => { v.hidden = v.id !== `view-${state.tab}`; });
   if (state.tab !== 'shop') $('#mbar').hidden = true;
@@ -1543,15 +1599,36 @@ document.addEventListener('click', (e) => {
     SETTINGS.area = state.acc.area; SETTINGS.transport = state.acc.transport;
     state.acc.liveDraft = null;
     applyArea();
-    if (areaChanged) { state.prices = defaultPrices(); state.priceDates = {}; state.offers = []; state.reserved = {}; state.bought = {}; }
+    if (areaChanged) { state.prices = defaultPrices(); state.priceDates = {}; state.offers = SHARED_OFFERS.get(SETTINGS.area); state.reserved = {}; state.bought = {}; }
     state.acc.locMsg = areaChanged ? `${currentArea().name}のお店に切りかえました。` : '移動手段を変更しました。';
   }
   if (a === 'acc-clear-history') {
     if (state.confirmAcc === 'history') { state.history = []; state.confirmAcc = null; } else { state.confirmAcc = 'history'; renderAccount(); return; }
   }
+  if (a === 'store-welcome-close') { LS.set('kd-store-welcome', false); renderStore(); return; }
+  if (a === 'store-copy-code' && MY_STORE && !AUTH.user.staff) {
+    const done = () => { state.copied = true; renderAccount(); setTimeout(() => { state.copied = false; if (state.tab === 'account') renderAccount(); }, 1800); };
+    if (navigator.clipboard) navigator.clipboard.writeText(MY_STORE.code).then(done, done); else done();
+    return;
+  }
+  if (a === 'store-new-code' && MY_STORE && !AUTH.user.staff) {
+    if (state.confirmAcc !== 'code') { state.confirmAcc = 'code'; renderAccount(); return; }
+    const reg = STORE_REG.all();
+    if (reg[AUTH.user.storeKey]) { MY_STORE.code = reg[AUTH.user.storeKey].code = newStoreCode(); STORE_REG.save(reg); }
+    state.confirmAcc = null; renderAccount(); return;
+  }
   if (a === 'acc-delete') {
     if (state.confirmAcc !== 'delete') { state.confirmAcc = 'delete'; renderAccount(); return; }
     const accs = AUTH.accounts(); delete accs[AUTH.user.id]; AUTH.set('kd-accounts', accs);
+    if (IS_STORE) {
+      // 店舗のメンバーから外す。最後の1人なら、店舗の登録と配信も消す
+      const reg = STORE_REG.all(), key = AUTH.user.storeKey, s = reg[key];
+      if (s) {
+        s.members = s.members.filter((m) => m !== AUTH.user.id);
+        if (!s.members.length) { delete reg[key]; SHARED_OFFERS.set(s.area, SHARED_OFFERS.get(s.area).filter((o) => o.store !== s.slot)); }
+        STORE_REG.save(reg);
+      }
+    }
     const keys = []; for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
     keys.filter((k) => k.startsWith(KD_PREFIX)).forEach((k) => localStorage.removeItem(k));
     logout(); return;
@@ -1619,12 +1696,13 @@ document.addEventListener('click', (e) => {
   if (a === 'dec') { state.counts[id] = Math.max(0, (state.counts[id] || 0) - 1); if (!state.counts[id]) delete state.counts[id]; }
   if (a === 'clear') state.counts = {};
   if (a === 'sample') state.counts = { ...SAMPLE_MENU };
-  if (a === 'view-store') state.viewStore = id;
-  if (a === 'toggle-offer') {
-    const sid = state.viewStore, ing = t.dataset.ing;
+  if (a === 'toggle-offer' && IS_STORE && MY_STORE) {
+    // 配信はお店のアカウントだけ。自分の店舗の分だけを書きかえる
+    const sid = MY_STORE.slot, ing = t.dataset.ing;
+    state.offers = SHARED_OFFERS.get(SETTINGS.area);
     if (offerFor(sid, ing)) state.offers = state.offers.filter((o) => !(o.store === sid && o.ing === ing));
-    else state.offers.push({ store: sid, ing, discount: Number(t.dataset.discount), recipes: t.dataset.recipes.split(','), slots: JSON.parse(t.dataset.slots || 'null') });
-    if (!offerFor(sid, ing)) delete state.reserved[sid + ':' + ing];
+    else state.offers.push({ store: sid, ing, discount: Number(t.dataset.discount), recipes: t.dataset.recipes.split(','), slots: JSON.parse(t.dataset.slots || 'null'), at: new Date().toISOString() });
+    SHARED_OFFERS.set(SETTINGS.area, state.offers);
   }
   if (a === 'reset-prices') state.prices = defaultPrices();
   save();
@@ -1676,6 +1754,13 @@ document.addEventListener('change', (e) => {
     state.prices[el.dataset.ing][el.dataset.store] = el.value === '' ? null : Number(el.value);
     save(); renderPrices();
   }
+});
+
+// ほかのタブ・アカウントでお店が配信したら、すぐに反映する
+window.addEventListener('storage', (e) => {
+  if (e.key !== 'kd-shared-offers' || !AUTH.user) return;
+  state.offers = SHARED_OFFERS.get(SETTINGS.area);
+  if (state.tab === 'shop' || state.tab === 'store') render();
 });
 
 if (AUTH.user) { renderForm(); render(); }
