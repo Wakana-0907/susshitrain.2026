@@ -1077,6 +1077,84 @@ function offerSlots(sid, excess) {
   return { respond, slots: hours.map((h) => ({ h, limit })) };
 }
 
+// ---------- 今日の売れ筋（お店） ----------
+// 献立を登録している人の数（デモの推計）に、日によるゆらぎと、このブラウザで実際に献立を選んでいる人の分を足す
+function hashNum(t) { let h = 7; for (const c of String(t)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; }
+function appPicks() {
+  const out = {}; let people = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    const m = k && k.match(/^kd:(.+):kd-counts$/);
+    if (!m || m[1] === 'nouser') continue;
+    const acc = AUTH.accounts()[m[1]];
+    if (acc && acc.role === 'store') continue;
+    let set = {}, counts = {};
+    try { set = JSON.parse(localStorage.getItem(`kd:${m[1]}:kd-settings`) || '{}') || {}; counts = JSON.parse(localStorage.getItem(k) || '{}') || {}; } catch (e) { continue; }
+    if ((set.area || AREAS[0].id) !== SETTINGS.area) continue;
+    const ent = Object.entries(counts).filter(([id, c]) => c > 0 && RECIPES.find((r) => r.id === id));
+    if (!ent.length) continue;
+    people++;
+    ent.forEach(([id, c]) => { out[id] = (out[id] || 0) + c; });
+  }
+  return { out, people };
+}
+function todayTrend(sid) {
+  const today = dayStr();
+  const users = REGION_USERS * STORE_SHARE[sid] * 0.9;
+  const picks = appPicks();
+  const dishes = RECIPES.map((r) => {
+    const f = 0.75 + (hashNum(today + r.id) % 50) / 100;
+    const real = picks.out[r.id] || 0;
+    return { r, n: Math.round(users * r.pop * f) + real, real };
+  }).sort((a, b) => b.n - a.n);
+  const stock = Object.fromEntries(storeDemand(sid).map((x) => [x.id, x.stock]));
+  const need = {}, from = {};
+  dishes.forEach(({ r, n }) => {
+    for (const [ing, q] of Object.entries(r.uses)) {
+      need[ing] = (need[ing] || 0) + n * q;
+      if (!from[ing] || from[ing].n < n) from[ing] = { name: r.name, n };
+    }
+  });
+  const ings = Object.entries(need)
+    .filter(([id]) => basePrice(id, sid) !== null && INGREDIENTS[id])
+    .map(([id, q]) => { const ing = INGREDIENTS[id]; const packs = Math.max(1, Math.round(q / ing.pack)); return { id, ing, packs, short: stock[id] !== undefined && packs > stock[id], by: from[id] ? from[id].name : '' }; })
+    .sort((a, b) => b.packs - a.packs);
+  return { dishes, ings, people: picks.people };
+}
+function todayTrendHtml(sid) {
+  const t = todayTrend(sid);
+  const tab = state.trendTab || 'ings';
+  const top = t.ings.slice(0, 3).map((x) => x.ing.name);
+  const maxP = t.ings.length ? t.ings[0].packs : 1;
+  const unit = (ing) => (ing.pack === 1 ? ing.unit : 'パック');
+  const body = tab === 'dishes'
+    ? `<ol class="tr-dishes">${t.dishes.slice(0, 8).map((x, i) => `<li class="${i < 3 ? 'is-top' : ''}">
+        <span class="tr-rank">${i + 1}</span>
+        <span class="tr-name">${esc(x.r.name)}<span class="tr-ings">${Object.keys(x.r.uses).filter((id) => INGREDIENTS[id]).slice(0, 4).map((id) => INGREDIENTS[id].name).join('・')}</span></span>
+        <span class="tr-n num">${x.n.toLocaleString()}<small>人</small>${x.real ? `<span class="tr-real">アプリで選択中 ${x.real}</span>` : ''}</span>
+      </li>`).join('')}</ol>`
+    : `<div class="tr-ings-cloud">${t.ings.slice(0, 10).map((x, i) => {
+        const lv = i < 3 ? 'hot' : x.packs >= maxP * 0.45 ? 'warm' : 'mild';
+        return `<span class="tr-pill tr-${lv}" title="${esc(x.by)}などで使う">
+          ${lv === 'hot' ? '<i class="tr-flag">よく売れそう</i>' : ''}<b>${esc(x.ing.name)}</b>
+          ${x.short ? '<i class="tr-short">品薄注意</i>' : ''}
+          <span class="tr-by"><span class="tr-q">約${x.packs}${unit(x.ing)}</span>・${esc(x.by)}など</span>
+        </span>`;
+      }).join('')}</div>`;
+  return `<section class="panel today-trend">
+    <div class="tr-head">
+      <h3>今日の売れ筋</h3>
+      <span class="muted small">${fmtDay(dayStr())}・献立の登録から推計${t.people ? `（アプリで献立を選んでいる人 ${t.people}人をふくむ）` : ''}</span>
+    </div>
+    <p class="tr-summary">今日は <b>${top.map(esc).join('・')}</b> がよく売れそうです</p>
+    <div class="tr-tabs" role="tablist">
+      <button role="tab" class="tr-tab ${tab === 'ings' ? 'is-on' : ''}" data-action="trend-tab" data-k="ings" aria-selected="${tab === 'ings'}">今日購入予定の食材</button>
+      <button role="tab" class="tr-tab ${tab === 'dishes' ? 'is-on' : ''}" data-action="trend-tab" data-k="dishes" aria-selected="${tab === 'dishes'}">今日よく作られる料理</button>
+    </div>
+    ${body}
+  </section>`;
+}
+
 function renderStore() {
   const sid = state.viewStore;
   const s = storeById(sid);
@@ -1093,8 +1171,6 @@ function renderStore() {
     lossAfter += offerFor(sid, r.id) ? v * 0.3 : v;
   });
 
-  const ranking = RECIPES.map((r) => ({ r, n: Math.round(users * r.pop) })).sort((a, b) => b.n - a.n).slice(0, 5);
-
   const label = { ok: 'ちょうど', short: '足りない', risk: '売れ残りそう', extra: '多め（日持ちOK）' };
 
   const welcome = MY_STORE && !AUTH.user.staff && LS.get('kd-store-welcome', false) ? `<div class="store-welcome">
@@ -1106,6 +1182,7 @@ function renderStore() {
   $('#store-view').innerHTML = `${welcome}
     ${typeof storeLivePanel === 'function' ? storeLivePanel() : ''}
     ${MY_STORE ? `<div class="store-title" style="--store:${s.color}"><span class="dot"></span><b>${esc(MY_STORE.name)}</b><span class="muted small">${esc(currentArea().name)}</span></div>` : ''}
+    ${todayTrendHtml(sid)}
     <div class="kpis">
       <div class="kpi"><span class="muted small">明日来店しそうな献立登録者</span><span class="mid num">${users.toLocaleString()}<small>人</small></span></div>
       <div class="kpi"><span class="muted small">売れ残り見込み</span><span class="mid num">${yen(lossAfter)}</span>${lossAfter < lossBefore ? `<span class="small good">配信前 ${yen(lossBefore)} から減少</span>` : ''}</div>
@@ -1133,8 +1210,6 @@ function renderStore() {
         <h3>売れ残りそうな食材への提案</h3>
         ${risk.length ? crowdChart(sid, risk) : ''}
         ${risk.length ? risk.map((r) => storeOfferCard(r, sid)).join('') : '<p class="muted">売れ残りそうな食材はありません。</p>'}
-        <h3 class="sub-h">この地域でよく作られる献立</h3>
-        <ol class="ranking">${ranking.map((x) => `<li><span>${x.r.name}</span><span class="num muted">${x.n}人</span></li>`).join('')}</ol>
       </section>
     </div>
     ${offerResults(sid)}
@@ -1827,6 +1902,7 @@ document.addEventListener('click', (e) => {
     const m = state.menuLog[Number(t.dataset.i)];
     if (m) { state.counts = {}; for (const [rid, c] of Object.entries(m.counts)) if (RECIPES.find((r) => r.id === rid)) state.counts[rid] = c; state.tagFilter = 'picked'; state.justRecorded = null; }
   }
+  if (a === 'trend-tab') { state.trendTab = t.dataset.k; renderStore(); return; }
   if (a === 'tag-filter') { state.tagFilter = t.dataset.k; renderRecipes(); return; }
   if (a === 'tick') {
     if (state.bought[id]) delete state.bought[id];

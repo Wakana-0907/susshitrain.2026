@@ -1071,3 +1071,52 @@ body.lv-open { overflow: hidden; }
 .pc-input { width: 96px; font: 700 1.2rem ui-monospace, Menlo, monospace; letter-spacing: .3em; text-align: center; padding: 4px 6px; border: 1px solid var(--line); border-radius: 10px; }
 .lv-pin .pickup { background: transparent; border-style: solid; padding: 6px 10px; }
 .lv-pin .pickup-code span { width: 34px; height: 40px; font-size: 1.3rem; }
+
+/* ---------- 今日の売れ筋（お店） ---------- */
+.today-trend { margin-bottom: 14px; }
+.tr-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.tr-head h3 { margin: 0; }
+.tr-summary { margin: 6px 0 10px; font-size: 0.95rem; }
+.tr-summary b { color: #c0700f; }
+.tr-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.tr-tab { border: 1.5px solid var(--primary); background: #fff; color: var(--primary-dark); border-radius: 999px; padding: 5px 14px; font-size: 0.85rem; }
+.tr-tab.is-on { background: var(--primary); color: #fff; }
+.tr-ings-cloud { display: flex; flex-wrap: wrap; gap: 8px; }
+.tr-pill { position: relative; display: inline-grid; grid-template-columns: auto auto; align-items: baseline; gap: 0 6px; border-radius: 14px; padding: 6px 12px; border: 1.5px solid var(--line); background: #fff; }
+.tr-pill b { font-size: 0.95rem; }
+.tr-pill .tr-q { font-size: 0.78rem; color: var(--ink-soft); }
+.tr-pill .tr-by { grid-column: 1 / -1; font-size: 0.68rem; color: var(--ink-soft); }
+.tr-hot { background: #fff1dc; border-color: #f2b84b; padding: 8px 14px; }
+.tr-hot b { font-size: 1.1rem; }
+.tr-warm { background: var(--primary-wash); border-color: #b9d6e8; }
+.tr-mild { opacity: .85; }
+.tr-flag, .tr-short { grid-column: 1 / -1; font-style: normal; font-size: 0.64rem; font-weight: 700; justify-self: start; border-radius: 4px; padding: 0 5px; }
+.tr-flag { background: #f2b84b; color: #4a3500; }
+.tr-short { background: #f6e1d8; color: #a4512f; }
+.tr-dishes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tr-dishes li { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 12px; background: #fff; border: 1px solid var(--line); }
+.tr-dishes li.is-top { background: #fff1dc; border-color: #f2b84b; }
+.tr-rank { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--line); font-weight: 700; font-size: 0.8rem; }
+.is-top .tr-rank { background: #f2b84b; color: #4a3500; }
+.tr-name { font-weight: 700; display: grid; }
+.tr-ings { font-weight: 400; font-size: 0.72rem; color: var(--ink-soft); }
+.tr-n { text-align: right; display: grid; font-weight: 700; }
+.tr-real { font-size: 0.64rem; font-weight: 400; color: var(--primary-dark); }
+/* 今日の売れ筋：タグを1行に、食材は2列でそろえる */
+.tr-tabs { flex-wrap: nowrap; }
+.tr-tab { flex: 1 1 0; min-width: 0; padding: 6px 8px; font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
+.tr-tab::before { content: '#'; opacity: .6; margin-right: 1px; }
+.tr-ings-cloud { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.tr-pill { display: grid; grid-template-columns: 1fr auto; padding: 6px 10px; min-width: 0; }
+.tr-pill b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-pill .tr-by { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-hot { padding: 6px 10px; }
+.tr-pill b, .tr-hot b { white-space: normal; font-size: 0.92rem; word-break: keep-all; overflow-wrap: anywhere; }
+.tr-pill .tr-q { font-size: 0.72rem; white-space: nowrap; }
+.tr-n { white-space: nowrap; display: block; }
+.tr-n .tr-real { display: block; }
+.tr-pill { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; }
+.tr-pill b, .tr-hot b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tr-pill .tr-by { white-space: normal; }
+.tr-pill .tr-by .tr-q { color: var(--ink); font-weight: 700; font-size: 0.74rem; }
+.tr-pill { align-content: start; }
