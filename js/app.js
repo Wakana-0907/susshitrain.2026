@@ -23,9 +23,32 @@ if (IS_STORE && MY_STORE) { SETTINGS.area = MY_STORE.area; SETTINGS.liveArea = n
 const ALLOWED_TABS = IS_STORE ? (MY_STORE ? ['store', 'account'] : ['account']) : ['shop', 'history', 'prices', 'account'];
 // お店からの配信は、端末の中の全アカウントで共有する（エリアごと）
 const SHARED_OFFERS = {
-  get: (area) => (AUTH.get('kd-shared-offers', {})[area] || []),
+  get: (area) => (AUTH.get('kd-shared-offers', {})[area] || []).map((o, i) => (o.id ? o : Object.assign(o, { id: `o${i}${o.store}${o.ing}` }))),
   set(area, list) { const all = AUTH.get('kd-shared-offers', {}); all[area] = list; AUTH.set('kd-shared-offers', all); },
 };
+// 配信の期限・状態
+const OFFER_UNTIL = { today: '今日いっぱい', tomorrow: '明日の21時まで', two: 'あさっての21時まで' };
+function untilDate(k) {
+  const d = new Date();
+  if (k === 'today') d.setHours(23, 59, 0, 0); else { d.setDate(d.getDate() + (k === 'two' ? 2 : 1)); d.setHours(21, 0, 0, 0); }
+  return d.toISOString();
+}
+function fmtUntil(iso) {
+  const d = new Date(iso), n = new Date();
+  const days = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(n.getFullYear(), n.getMonth(), n.getDate())) / 864e5);
+  return `${['今日', '明日', 'あさって'][days] || `${d.getMonth() + 1}/${d.getDate()}`}の${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}まで`;
+}
+const offerLive = (o) => o.status !== 'ended' && (!o.until || Date.now() < new Date(o.until).getTime());
+const offerTaken = (o, h) => (o.reservations || []).filter((r) => h === undefined || r.h === h).length;
+const myReservation = (o) => (o.reservations || []).find((r) => r.uid === AUTH.user.id);
+// 共有の配信データを読みなおしてから書きかえる（ほかの人の取り置きを消さないように）
+function mutateOffers(fn) {
+  const list = SHARED_OFFERS.get(SETTINGS.area);
+  const r = fn(list);
+  SHARED_OFFERS.set(SETTINGS.area, list);
+  state.offers = list;
+  return r;
+}
 const allAreas = (extra) => {
   const live = extra || SETTINGS.liveArea;
   return live ? [live, ...AREAS] : AREAS;
@@ -79,7 +102,6 @@ const state = {
   viewStore: MY_STORE ? MY_STORE.slot : 'A',
   ai: Object.assign({ key: '', model: 'claude-haiku-4-5' }, LS.get('kd-ai', {})),
   shares: LS.get('kd-shares', {}),
-  reserved: LS.get('kd-reserved', {}),
   priceDates: LS.get('kd-price-dates', {}),
   receipt: { store: 'B', text: '', result: null },
   tagFilter: 'all',
@@ -123,7 +145,6 @@ function save() {
   LS.set('kd-recipes', customRecipes);
   LS.set('kd-ai', state.ai);
   LS.set('kd-shares', state.shares);
-  LS.set('kd-reserved', state.reserved);
   LS.set('kd-price-dates', state.priceDates);
   LS.set('kd-bought', state.bought);
   LS.set('kd-extras', state.extras);
@@ -164,7 +185,7 @@ function travelMinutes(storeIds) {
 // ---------- 価格（お店からの値引き配信を反映） ----------
 
 function offerFor(storeId, ingId) {
-  return state.offers.find((o) => o.store === storeId && o.ing === ingId);
+  return state.offers.find((o) => o.store === storeId && o.ing === ingId && offerLive(o));
 }
 function basePrice(ingId, storeId) {
   const v = state.prices[ingId] ? state.prices[ingId][storeId] : null;
@@ -429,27 +450,40 @@ function renderRecipes() {
 
 function renderOffers() {
   const box = $('#offers');
-  if (!state.offers.length || !SETTINGS.offersOn) { box.innerHTML = ''; return; }
-  const first = state.offers[0];
+  const live = state.offers.filter(offerLive);
+  if (!live.length || !SETTINGS.offersOn) { box.innerHTML = ''; return; }
+  const first = live[0];
   box.innerHTML = `
     <details class="offer-card" id="offer-details" ${state.offerOpen ? 'open' : ''}>
-      <summary class="offer-head">お店からのおすすめ ${state.offers.length}件　<span class="offer-sum">${esc(INGREDIENTS[first.ing].name)} ${Math.round(first.discount * 100)}%オフ${state.offers.length > 1 ? ' ほか' : ''}</span><span class="muted small">（タップで開く）</span></summary>
-      ${state.offers.map((o) => {
+      <summary class="offer-head">お店からのおすすめ ${live.length}件　<span class="offer-sum">${esc(INGREDIENTS[first.ing].name)} ${Math.round(first.discount * 100)}%オフ${live.length > 1 ? ' ほか' : ''}</span><span class="muted small">（タップで開く）</span></summary>
+      ${live.map((o) => {
         const s = storeById(o.store), ing = INGREDIENTS[o.ing];
-        const rs = o.recipes.map((id) => RECIPES.find((r) => r.id === id));
+        const rs = (o.recipes || []).map((id) => RECIPES.find((r) => r.id === id));
         return `<div class="offer-row">
           <p><b>${s.name}</b>で <b>${ing.name}</b> が <span class="off">${Math.round(o.discount * 100)}%オフ</span>
           <span class="muted">${yen(basePrice(o.ing, o.store))} → ${yen(priceOf(o.ing, o.store))}</span></p>
-          ${o.slots ? (() => {
-            const slot = o.slots[(o.ing.length + o.store.charCodeAt(0)) % o.slots.length];
-            const key = o.store + ':' + o.ing;
-            const done = state.reserved[key];
-            return `<p class="offer-slot small">あなたへの配信枠：<b>${slot.h}時台</b>・先着${slot.limit}個　${done ? `<span class="tag-share">取り置き済み（${slot.h}時台に受け取り）</span> <button class="link small" data-action="reserve" data-key="${key}">取り消す</button>` : `<button class="chip" data-action="reserve" data-key="${key}" data-h="${slot.h}">取り置きする</button>`}</p>`;
-          })() : ''}
+          ${o.message ? `<p class="offer-msg small">「${esc(o.message)}」</p>` : ''}
+          ${o.slots && o.slots.length ? offerSlotHtml(o) : ''}
+          ${o.until ? `<p class="muted small">${fmtUntil(o.until)}</p>` : ''}
           <p class="offer-recipes">${rs.filter(Boolean).map((r) => `<button class="chip" data-action="inc" data-id="${r.id}">＋ ${esc(r.name)}</button>`).join('')}</p>
         </div>`;
       }).join('')}
+      ${state.reserveMsg ? `<p class="small warn">${esc(state.reserveMsg)}</p>` : ''}
     </details>`;
+}
+
+// 取り置き：人によって配信する時間帯を分ける（混雑を避ける）。埋まっていたら空いている時間帯を案内
+function offerSlotHtml(o) {
+  const mine = myReservation(o);
+  if (mine) return `<p class="offer-slot small"><span class="tag-share">取り置き済み（${mine.h}時台に受け取り）</span> <button class="link small" data-action="reserve" data-id="${o.id}">取り消す</button></p>`;
+  const seed = [...(AUTH.user.id + o.ing)].reduce((a, c) => a + c.charCodeAt(0), 0);
+  const mySlot = o.slots[seed % o.slots.length];
+  const left = (sl) => sl.limit - offerTaken(o, sl.h);
+  const btn = (sl) => `<button class="chip" data-action="reserve" data-id="${o.id}" data-h="${sl.h}">取り置きする</button>`;
+  if (left(mySlot) > 0) return `<p class="offer-slot small">あなたへの配信枠：<b>${mySlot.h}時台</b>・残り${left(mySlot)}個　${btn(mySlot)}</p>`;
+  const other = o.slots.find((sl) => left(sl) > 0);
+  if (other) return `<p class="offer-slot small">${mySlot.h}時台は受付終了。<b>${other.h}時台</b>なら残り${left(other)}個　${btn(other)}</p>`;
+  return '<p class="offer-slot small muted">取り置きは受付終了しました（店頭では値引き価格で買えます）</p>';
 }
 
 function planLabel(p) {
@@ -1043,6 +1077,7 @@ function renderStore() {
       <button class="btn-soft" data-action="store-welcome-close">わかった</button>
     </div>` : '';
   $('#store-view').innerHTML = `${welcome}
+    ${typeof storeLivePanel === 'function' ? storeLivePanel() : ''}
     ${MY_STORE ? `<div class="store-title" style="--store:${s.color}"><span class="dot"></span><b>${esc(MY_STORE.name)}</b><span class="muted small">${esc(currentArea().name)}</span></div>` : ''}
     <div class="kpis">
       <div class="kpi"><span class="muted small">明日来店しそうな献立登録者</span><span class="mid num">${users.toLocaleString()}<small>人</small></span></div>
@@ -1070,24 +1105,141 @@ function renderStore() {
       <section class="panel">
         <h3>売れ残りそうな食材への提案</h3>
         ${risk.length ? crowdChart(sid, risk) : ''}
-        ${risk.length ? risk.map((r) => {
-          const discount = r.ratio > 1.5 ? 0.3 : 0.2;
-          const plan = offerSlots(sid, r.excess);
-          const recs = RECIPES.filter((x) => x.uses[r.id]).sort((a, b) => b.pop - a.pop).slice(0, 2);
-          const sent = offerFor(sid, r.id);
-          return `<div class="risk-card ${sent ? 'is-sent' : ''}">
-            <p><b>${r.ing.name}</b> が約 <b>${r.excess}</b> ${r.ing.pack === 1 ? r.ing.unit : 'パック'}余りそう <span class="muted small">（${yen(r.excess * basePrice(r.id, sid))}分）</span></p>
-            <p class="muted small">提案：${Math.round(discount * 100)}%オフにして「${recs.map((x) => x.name).join('」「')}」と一緒にアプリでおすすめ</p>
-            <p class="small slot-line">配信：${plan.slots.map((x) => `<span class="slot">${x.h}時台 ${x.limit}人</span>`).join('')}<span class="muted">取り置き予約つき</span></p>
-            <button class="${sent ? 'btn-soft' : 'btn'}" data-action="toggle-offer" data-ing="${r.id}" data-discount="${discount}" data-recipes="${recs.map((x) => x.id).join(',')}" data-slots='${JSON.stringify(plan.slots)}'>${sent ? '配信済み（取り消す）' : 'アプリで配信する'}</button>
-          </div>`;
-        }).join('') : '<p class="muted">売れ残りそうな食材はありません。</p>'}
+        ${risk.length ? risk.map((r) => storeOfferCard(r, sid)).join('') : '<p class="muted">売れ残りそうな食材はありません。</p>'}
         <h3 class="sub-h">この地域でよく作られる献立</h3>
         <ol class="ranking">${ranking.map((x) => `<li><span>${x.r.name}</span><span class="num muted">${x.n}人</span></li>`).join('')}</ol>
       </section>
     </div>
+    ${offerResults(sid)}
     <p class="muted small foot-note">※ 需要予測・在庫・値引き後の売れ行き（配信で余りの7割が売れる想定）はデモ用の値です。配信すると「かいもの」画面のおすすめと価格に反映されます。</p>
   `;
+}
+
+// ---------- 配信（お店） ----------
+const OFFER_HOURS = [14, 15, 16, 17, 18, 19, 20];
+
+function newDraft(r, sid) {
+  const plan = offerSlots(sid, r.excess);
+  const recs = RECIPES.filter((x) => x.uses[r.id]).sort((a, b) => b.pop - a.pop);
+  const slots = {};
+  OFFER_HOURS.forEach((h) => { const p = plan.slots.find((x) => x.h === h); slots[h] = { on: !!p, limit: p ? p.limit : Math.max(1, Math.round(plan.respond / 3)) }; });
+  return {
+    ing: r.id, discount: r.ratio > 1.5 ? 0.3 : 0.2, slots, until: 'tomorrow',
+    recipes: Object.fromEntries(recs.slice(0, 2).map((x) => [x.id, true])),
+    msg: `${INGREDIENTS[r.id].name}が多めに入荷しています。${recs[0] ? `「${recs[0].name}」などにどうぞ。` : ''}`,
+  };
+}
+
+function storeOfferCard(r, sid) {
+  const live = offerFor(sid, r.id);
+  const unit = r.ing.pack === 1 ? r.ing.unit : 'パック';
+  const head = `<p><b>${r.ing.name}</b> が約 <b>${r.excess}</b> ${unit}余りそう <span class="muted small">（${yen(r.excess * basePrice(r.id, sid))}分）</span></p>`;
+  if (live) {
+    const taken = offerTaken(live);
+    return `<div class="risk-card is-sent">
+      ${head}
+      <p class="small"><span class="live-dot"></span><b>配信中</b>　<span class="off">${Math.round(live.discount * 100)}%オフ</span>　<span class="muted">${fmtUntil(live.until)}</span></p>
+      ${live.message ? `<p class="offer-msg small">「${esc(live.message)}」</p>` : ''}
+      <p class="small">取り置き <b>${taken}</b> / ${live.qty}個</p>
+      <div class="take-bar"><span style="width:${Math.min(100, (taken / Math.max(1, live.qty)) * 100)}%"></span></div>
+      <p class="small slot-line">${live.slots.map((x) => { const n = offerTaken(live, x.h); return `<span class="slot ${n >= x.limit ? 'is-full' : ''}">${x.h}時台 ${n}/${x.limit}${n >= x.limit ? ' 満' : ''}</span>`; }).join('')}</p>
+      <button class="btn-soft" data-action="offer-stop" data-id="${live.id}">${state.confirmStop === live.id ? 'もう一度押すと配信を止めます' : '配信を止める'}</button>
+    </div>`;
+  }
+  const d = state.draft && state.draft.ing === r.id ? state.draft : null;
+  if (!d) {
+    const plan = offerSlots(sid, r.excess);
+    const recs = RECIPES.filter((x) => x.uses[r.id]).sort((a, b) => b.pop - a.pop).slice(0, 2);
+    return `<div class="risk-card">
+      ${head}
+      <p class="muted small">提案：${r.ratio > 1.5 ? 30 : 20}%オフにして「${recs.map((x) => x.name).join('」「')}」と一緒にアプリでおすすめ</p>
+      <p class="small slot-line">配信：${plan.slots.map((x) => `<span class="slot">${x.h}時台 ${x.limit}人</span>`).join('')}<span class="muted">取り置き予約つき</span></p>
+      <button class="btn" data-action="offer-draft" data-ing="${r.id}">配信内容を決める</button>
+    </div>`;
+  }
+  return offerEditor(r, sid, d);
+}
+
+function offerEditor(r, sid, d) {
+  const v = hourlyVisitors(sid);
+  const quiet = OFFER_HOURS.slice().sort((a, b) => v[a] - v[b]).slice(0, 3);
+  const recs = RECIPES.filter((x) => x.uses[r.id]).sort((a, b) => b.pop - a.pop).slice(0, 4);
+  const qty = OFFER_HOURS.reduce((a, h) => a + (d.slots[h].on ? d.slots[h].limit : 0), 0);
+  const base = basePrice(r.id, sid);
+  const unit = r.ing.pack === 1 ? r.ing.unit : 'パック';
+  const pickedRecs = recs.filter((x) => d.recipes[x.id]);
+  return `<div class="risk-card offer-editor">
+    <p><b>${r.ing.name}</b> の配信内容 <span class="muted small">余りそう：約${r.excess}${unit}</span></p>
+
+    <p class="acc-label">値引き</p>
+    <div class="dr-pills">${[0.1, 0.2, 0.3, 0.4, 0.5].map((x) => `<button class="pill-s ${Math.abs(d.discount - x) < 0.001 ? 'is-on' : ''}" data-action="dr-discount" data-v="${x}">${Math.round(x * 100)}%</button>`).join('')}</div>
+    <p class="muted small">${yen(base)} → <b>${yen(Math.round(base * (1 - d.discount)))}</b></p>
+
+    <p class="acc-label">取り置きの時間帯と個数 <span class="muted small">空いている時間帯に分けると混みません</span></p>
+    <div class="dr-slots">${OFFER_HOURS.map((h) => `<label class="dr-slot ${d.slots[h].on ? 'is-on' : ''}">
+      <input type="checkbox" data-dr="slot-on" data-h="${h}" ${d.slots[h].on ? 'checked' : ''}>
+      <span>${h}時台${quiet.includes(h) ? '<i class="quiet">すいている</i>' : ''}</span>
+      <input type="number" min="1" max="99" data-dr="slot-limit" data-h="${h}" value="${d.slots[h].limit}" ${d.slots[h].on ? '' : 'disabled'}><span class="small">個</span>
+    </label>`).join('')}</div>
+    <p class="small">合計 <b>${qty}</b>個 ${qty > r.excess ? '<span class="warn">（余りそうな数より多いです）</span>' : `<span class="muted">（余りそうな数 ${r.excess}${unit}）</span>`}</p>
+
+    <p class="acc-label">配信の期限</p>
+    <select data-dr="until">${Object.entries(OFFER_UNTIL).map(([k, t]) => `<option value="${k}" ${d.until === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
+
+    <p class="acc-label">一緒におすすめする献立</p>
+    <div class="dr-recipes">${recs.map((x) => `<label><input type="checkbox" data-dr="recipe" data-id="${x.id}" ${d.recipes[x.id] ? 'checked' : ''}>${esc(x.name)}</label>`).join('')}</div>
+
+    <label class="acc-label" for="dr-msg">ひとことメッセージ <span class="muted small">（60文字まで）</span></label>
+    <textarea id="dr-msg" data-dr="msg" maxlength="60" rows="2">${esc(d.msg)}</textarea>
+
+    <p class="acc-label">利用者に見える内容</p>
+    <div class="offer-card offer-preview"><div class="offer-row">
+      <p><b>${esc(storeById(sid).name)}</b>で <b>${r.ing.name}</b> が <span class="off">${Math.round(d.discount * 100)}%オフ</span> <span class="muted">${yen(base)} → ${yen(Math.round(base * (1 - d.discount)))}</span></p>
+      ${d.msg.trim() ? `<p class="offer-msg small">「${esc(d.msg.trim())}」</p>` : ''}
+      <p class="offer-slot small">あなたへの配信枠：<b>${(OFFER_HOURS.find((h) => d.slots[h].on) || '-')}時台</b> などに分けて配信　<span class="chip">取り置きする</span></p>
+      <p class="muted small">${fmtUntil(untilDate(d.until))}</p>
+      <p class="offer-recipes">${pickedRecs.map((x) => `<span class="chip">＋ ${esc(x.name)}</span>`).join('')}</p>
+    </div></div>
+
+    ${state.draftMsg ? `<p class="small warn">${esc(state.draftMsg)}</p>` : ''}
+    <div class="acc-actions">
+      <button class="btn" data-action="offer-send" data-ing="${r.id}" data-excess="${r.excess}">この内容で配信する</button>
+      <button class="btn-soft" data-action="offer-cancel">やめる</button>
+    </div>
+  </div>`;
+}
+
+function offerResults(sid) {
+  const mine = state.offers.filter((o) => o.store === sid).slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  if (!mine.length) return '';
+  const rows = mine.slice(0, 10).map((o) => {
+    const taken = offerTaken(o);
+    const bp = o.basePrice || basePrice(o.ing, sid) || 0;
+    const sales = taken * Math.round(bp * (1 - o.discount));
+    const saved = Math.min(taken, o.excess || taken) * bp;
+    const st = offerLive(o) ? '<span class="r-live">配信中</span>' : o.status === 'ended' ? '<span class="r-end">止めた</span>' : '<span class="r-end">期限切れ</span>';
+    const d = new Date(o.at);
+    return { o, taken, sales, saved, html: `<tr>
+      <td>${INGREDIENTS[o.ing] ? INGREDIENTS[o.ing].name : o.ing}<span class="muted small">${d.getMonth() + 1}/${d.getDate()}・${Math.round(o.discount * 100)}%オフ</span></td>
+      <td>${st}</td>
+      <td class="num">${taken}/${o.qty || '-'}<span class="muted small">${o.qty ? Math.round((taken / o.qty) * 100) + '%' : ''}</span></td>
+      <td class="num">${yen(saved)}</td>
+    </tr>` };
+  });
+  const sum = (k) => rows.reduce((a, x) => a + x[k], 0);
+  return `<section class="panel offer-results">
+    <h3>配信の結果</h3>
+    <div class="kpis">
+      <div class="kpi"><span class="muted small">配信した回数</span><span class="mid num">${rows.length}<small>回</small></span></div>
+      <div class="kpi"><span class="muted small">取り置きされた数</span><span class="mid num">${sum('taken')}<small>個</small></span></div>
+      <div class="kpi"><span class="muted small">防げた売れ残り</span><span class="mid num">${yen(sum('saved'))}</span><span class="small muted">取り置き分の売上 ${yen(sum('sales'))}</span></div>
+    </div>
+    <div class="table-wrap"><table class="r-table">
+      <thead><tr><th>食材</th><th>状態</th><th>取り置き</th><th>防げた売れ残り</th></tr></thead>
+      <tbody>${rows.map((x) => x.html).join('')}</tbody>
+    </table></div>
+    <p class="muted small">防げた売れ残り＝取り置きされた数（余りそうな数まで）× 元の価格。店頭で値引き価格で売れた分は入っていません。</p>
+  </section>`;
 }
 
 function crowdChart(sid, risk) {
@@ -1555,7 +1707,7 @@ function render() {
   document.querySelectorAll('.view').forEach((v) => { v.hidden = v.id !== `view-${state.tab}`; });
   if (state.tab !== 'shop') $('#mbar').hidden = true;
   if (state.tab === 'shop') renderMbar();
-  if (state.tab === 'shop') { renderOffers(); renderRecipes(); renderPicked(); renderPlan(); }
+  if (state.tab === 'shop') { if (typeof renderLiveRow === 'function') renderLiveRow(); renderOffers(); renderRecipes(); renderPicked(); renderPlan(); }
   if (state.tab === 'store') renderStore();
   if (state.tab === 'prices') renderPrices();
   if (state.tab === 'history') renderHistory();
@@ -1599,7 +1751,7 @@ document.addEventListener('click', (e) => {
     SETTINGS.area = state.acc.area; SETTINGS.transport = state.acc.transport;
     state.acc.liveDraft = null;
     applyArea();
-    if (areaChanged) { state.prices = defaultPrices(); state.priceDates = {}; state.offers = SHARED_OFFERS.get(SETTINGS.area); state.reserved = {}; state.bought = {}; }
+    if (areaChanged) { state.prices = defaultPrices(); state.priceDates = {}; state.offers = SHARED_OFFERS.get(SETTINGS.area); state.bought = {}; }
     state.acc.locMsg = areaChanged ? `${currentArea().name}のお店に切りかえました。` : '移動手段を変更しました。';
   }
   if (a === 'acc-clear-history') {
@@ -1688,7 +1840,19 @@ document.addEventListener('click', (e) => {
     if (state.confirmDel === i) { state.history.splice(i, 1); state.confirmDel = null; } else state.confirmDel = i;
   }
   if (a === 'toggle-share') { if (state.shares[id]) delete state.shares[id]; else state.shares[id] = true; }
-  if (a === 'reserve') { const k = t.dataset.key; if (state.reserved[k]) delete state.reserved[k]; else state.reserved[k] = Number(t.dataset.h); }
+  if (a === 'reserve') {
+    state.reserveMsg = '';
+    mutateOffers((list) => {
+      const o = list.find((x) => x.id === id);
+      if (!o || !offerLive(o)) { state.reserveMsg = 'この配信は終了しました。'; return; }
+      o.reservations = o.reservations || [];
+      const mine = o.reservations.findIndex((r) => r.uid === AUTH.user.id);
+      if (mine >= 0) { o.reservations.splice(mine, 1); return; }
+      const h = Number(t.dataset.h), sl = o.slots.find((x) => x.h === h);
+      if (!sl || offerTaken(o, h) >= sl.limit) { state.reserveMsg = 'ちょうど埋まってしまいました。ほかの時間帯を見てください。'; return; }
+      o.reservations.push({ uid: AUTH.user.id, h, at: new Date().toISOString() });
+    });
+  }
   if (a === 'receipt-sample') { state.receipt.store = 'B'; state.receipt.text = SAMPLE_RECEIPT; state.receipt.result = null; }
   if (a === 'receipt-read') applyReceipt();
   if (a === 'inc') state.justRecorded = null;
@@ -1696,13 +1860,36 @@ document.addEventListener('click', (e) => {
   if (a === 'dec') { state.counts[id] = Math.max(0, (state.counts[id] || 0) - 1); if (!state.counts[id]) delete state.counts[id]; }
   if (a === 'clear') state.counts = {};
   if (a === 'sample') state.counts = { ...SAMPLE_MENU };
-  if (a === 'toggle-offer' && IS_STORE && MY_STORE) {
-    // 配信はお店のアカウントだけ。自分の店舗の分だけを書きかえる
-    const sid = MY_STORE.slot, ing = t.dataset.ing;
-    state.offers = SHARED_OFFERS.get(SETTINGS.area);
-    if (offerFor(sid, ing)) state.offers = state.offers.filter((o) => !(o.store === sid && o.ing === ing));
-    else state.offers.push({ store: sid, ing, discount: Number(t.dataset.discount), recipes: t.dataset.recipes.split(','), slots: JSON.parse(t.dataset.slots || 'null'), at: new Date().toISOString() });
-    SHARED_OFFERS.set(SETTINGS.area, state.offers);
+  if ((a && a.startsWith('offer-')) || a === 'dr-discount') {
+    if (!IS_STORE || !MY_STORE) return;
+    const sid = MY_STORE.slot;
+    state.draftMsg = '';
+    if (a === 'offer-draft') { const r = storeDemand(sid).find((x) => x.id === t.dataset.ing); if (r) state.draft = newDraft(r, sid); }
+    if (a === 'offer-cancel') state.draft = null;
+    if (a === 'dr-discount' && state.draft) state.draft.discount = Number(t.dataset.v);
+    if (a === 'offer-stop') {
+      if (state.confirmStop !== id) { state.confirmStop = id; renderStore(); return; }
+      state.confirmStop = null;
+      mutateOffers((list) => { const o = list.find((x) => x.id === id); if (o) { o.status = 'ended'; o.endedAt = new Date().toISOString(); } });
+    }
+    if (a === 'offer-send' && state.draft) {
+      const d = state.draft, msgEl = $('#dr-msg');
+      if (msgEl) d.msg = msgEl.value;
+      const slots = OFFER_HOURS.filter((h) => d.slots[h].on).map((h) => ({ h, limit: Math.max(1, Math.round(Number(d.slots[h].limit) || 1)) }));
+      if (!slots.length) { state.draftMsg = '取り置きの時間帯を1つ以上えらんでください。'; renderStore(); return; }
+      const ing = d.ing;
+      mutateOffers((list) => {
+        list.forEach((o) => { if (o.store === sid && o.ing === ing && offerLive(o)) { o.status = 'ended'; o.endedAt = new Date().toISOString(); } });
+        list.push({
+          id: 'o' + Date.now().toString(36), store: sid, ing, discount: d.discount,
+          recipes: Object.keys(d.recipes).filter((k) => d.recipes[k]), slots, qty: slots.reduce((x, y) => x + y.limit, 0),
+          message: d.msg.replace(/[<>]/g, '').trim().slice(0, 60), until: untilDate(d.until), at: new Date().toISOString(),
+          status: 'live', by: AUTH.user.name, excess: Number(t.dataset.excess) || 0, basePrice: basePrice(ing, sid), reservations: [],
+        });
+      });
+      state.draft = null;
+    }
+    renderStore(); return;
   }
   if (a === 'reset-prices') state.prices = defaultPrices();
   save();
@@ -1721,6 +1908,7 @@ document.addEventListener('input', (e) => {
 });
 document.addEventListener('input', (e) => {
   const el = e.target;
+  if (el.dataset && el.dataset.dr === 'msg' && state.draft) state.draft.msg = el.value;
   if (el.dataset && el.dataset.rc) state.receipt[el.dataset.rc] = el.value;
 });
 document.addEventListener('keydown', (e) => {
@@ -1729,6 +1917,15 @@ document.addEventListener('keydown', (e) => {
 
 document.addEventListener('change', (e) => {
   const el = e.target;
+  if (el.dataset && el.dataset.dr && state.draft) {
+    const d = state.draft, h = el.dataset.h;
+    if (el.dataset.dr === 'slot-on') d.slots[h].on = el.checked;
+    if (el.dataset.dr === 'slot-limit') d.slots[h].limit = Math.max(1, Math.min(99, Math.round(Number(el.value) || 1)));
+    if (el.dataset.dr === 'until') d.until = el.value;
+    if (el.dataset.dr === 'recipe') d.recipes[el.dataset.id] = el.checked;
+    if (el.dataset.dr === 'msg') d.msg = el.value;
+    renderStore(); return;
+  }
   if (el.dataset && el.dataset.acc) { state.acc[el.dataset.acc] = el.value; state.acc.locMsg = ''; renderAccount(); return; }
   if (el.dataset && el.dataset.accSet) {
     SETTINGS[el.dataset.accSet] = el.type === 'checkbox' ? el.checked : el.value;
@@ -1755,6 +1952,13 @@ document.addEventListener('change', (e) => {
     save(); renderPrices();
   }
 });
+
+// 期限が来た配信を画面から外す（1分ごとに確認）
+let liveCount = state.offers.filter(offerLive).length;
+setInterval(() => {
+  const n = state.offers.filter(offerLive).length;
+  if (n !== liveCount) { liveCount = n; if (state.tab === 'shop' || state.tab === 'store') render(); }
+}, 60000);
 
 // ほかのタブ・アカウントでお店が配信したら、すぐに反映する
 window.addEventListener('storage', (e) => {
