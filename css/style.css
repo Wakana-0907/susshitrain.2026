@@ -1120,3 +1120,47 @@ body.lv-open { overflow: hidden; }
 .tr-pill .tr-by { white-space: normal; }
 .tr-pill .tr-by .tr-q { color: var(--ink); font-weight: 700; font-size: 0.74rem; }
 .tr-pill { align-content: start; }
+
+/* 受け取りコード：お店側の表示 */
+.code-inline { font-family: ui-monospace, Menlo, monospace; letter-spacing: .15em; color: var(--primary-dark); }
+.rsv-list { margin: 6px 0; }
+.rsv-list summary { cursor: pointer; color: var(--primary-dark); }
+.rsv-list .r-table { margin-top: 6px; }
+.rsv-list tr.is-picked td { color: var(--ink-soft); }
+.rsv-list tr.is-picked .code-inline { text-decoration: line-through; color: var(--ink-soft); }
+.dr-code { display: grid; gap: 4px; }
+.rsv-list td { white-space: nowrap; } .rsv-list td:nth-child(2) { white-space: normal; min-width: 3em; }
+
+/* 値引き率（1%ずつ）と期限（1時間ごと） */
+.dr-disc { display: flex; align-items: center; gap: 10px; }
+.dr-disc input[type=range] { flex: 1; min-width: 0; accent-color: var(--primary); }
+.dr-disc-num { display: inline-flex; align-items: center; gap: 3px; font-size: 0.85rem; white-space: nowrap; }
+.dr-disc-num input { width: 56px; font: inherit; font-weight: 700; text-align: right; padding: 3px 6px; border: 1px solid var(--line); border-radius: 8px; }
+.dr-until { display: flex; align-items: center; gap: 6px; }
+.offer-editor .dr-until select { width: auto; flex: 1; }
+
+/* 下のメニュー：表示されているタブを同じ幅に（アカウントのタブだけ狭くならないように） */
+.bnav .tab.tab-acc { flex: 1 1 0 !important; min-width: 0; }
+
+/* ---------- 献立・食材の写真 ---------- */
+.ph { flex: none; display: inline-grid; place-items: center; overflow: hidden; background: var(--primary-wash); color: var(--primary-dark); font-weight: 700; }
+.ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ph-recipe { width: 58px; height: 58px; border-radius: 12px 16px 12px 14px; font-size: 1.2rem; }
+.ph-sm { width: 34px; height: 34px; border-radius: 8px; font-size: 0.85rem; }
+.ph-xs { width: 20px; height: 20px; border-radius: 50%; font-size: 0.6rem; margin-right: 4px; vertical-align: -5px; }
+.ph-offer { width: 64px; height: 64px; border-radius: 12px; font-size: 1.2rem; }
+.recipe { justify-content: flex-start; }
+.recipe .recipe-main { flex: 1; padding-right: 26px; }
+.offer-row.has-ph { display: flex; gap: 10px; align-items: flex-start; }
+.offer-row.has-ph .offer-body { flex: 1; min-width: 0; }
+.br-main .ph-sm { margin-right: 2px; }
+.credits ul { margin: 6px 0 0; padding-left: 1.1em; font-size: 0.72rem; line-height: 1.6; display: grid; gap: 2px; }
+.credits a { color: var(--primary-dark); word-break: break-all; }
+.br-main { grid-template-columns: 26px 34px minmax(0, 1fr) auto auto; }
+
+/* 写真がないとき：NO IMAGE */
+.ph.ph-none { background: repeating-linear-gradient(135deg, var(--paper, #f4f8fb) 0 6px, var(--line) 6px 7px); color: var(--ink-soft); border: 1px dashed var(--line); display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.ph-noimg-t { font-size: 0.5rem; font-weight: 700; letter-spacing: 0.06em; line-height: 1; }
+.ph-sm.ph-none .ph-noimg-t, .ph-xs.ph-none .ph-noimg-t { display: none; }
+.ph-sm.ph-none svg { width: 60%; height: 60%; }
+.ph-xs.ph-none { display: none; }
