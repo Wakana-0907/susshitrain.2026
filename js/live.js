@@ -7,7 +7,7 @@ const LIVES = {
   all: () => AUTH.get('kd-lives', {}),
   save: (o) => AUTH.set('kd-lives', o),
 };
-const LIVE_STALE = 15000; // お店の画面から15秒合図がなければ終了あつかい
+const LIVE_STALE = 30000; // お店の画面から30秒合図がなければ終了あつかい
 const liveOn = (l) => !!(l && Date.now() - (l.beat || 0) < LIVE_STALE);
 const liveKey = (area, slot) => `${area}:${slot}`;
 function liveFor(area, slot) { const l = LIVES.all()[liveKey(area, slot)]; return liveOn(l) ? l : null; }
@@ -31,14 +31,23 @@ const LIVE = (() => {
   let key = null, liveId = null, stream = null, facing = 'environment', timer = null, lastHearts = 0, lastChat = 0;
   const peers = {}; // 配信側：視聴者ごとの接続
   let vpc = null, vQueue = [], vRemote = false, gotVideo = false; // 視聴側
-  const post = (m) => { if (ch) ch.postMessage(m); };
+  // 接続のやりとりは BroadcastChannel と localStorage の両方で送る（どちらかが届かない環境でもつながるように）
+  const seen = new Set();
+  const post = (m) => {
+    m.mid = tabId + Math.random().toString(36).slice(2, 8);
+    seen.add(m.mid);
+    if (ch) { try { ch.postMessage(m); } catch (e) { /* */ } }
+    if (m.t !== 'frame') { try { localStorage.setItem('kd-live-sig', JSON.stringify(m)); } catch (e) { /* */ } }
+  };
+  const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+  let capVideo = null, frameTimer = null, frameKey = null;
   const $l = (s) => box.querySelector(s);
 
   // ---------- 映像（WebRTC） ----------
   async function hostOffer(vid) {
     if (!stream) return;
     if (peers[vid]) { try { peers[vid].close(); } catch (e) { /* */ } }
-    const pc = new RTCPeerConnection({ iceServers: [] });
+    const pc = new RTCPeerConnection(ICE);
     peers[vid] = pc;
     stream.getTracks().forEach((tr) => pc.addTrack(tr, stream));
     pc.onicecandidate = (e) => { if (e.candidate) post({ t: 'ice', key, to: vid, c: e.candidate.toJSON() }); };
@@ -50,7 +59,7 @@ const LIVE = (() => {
   async function viewerOffer(sdp) {
     if (vpc) { try { vpc.close(); } catch (e) { /* */ } }
     vRemote = false; vQueue = [];
-    const pc = new RTCPeerConnection({ iceServers: [] });
+    const pc = new RTCPeerConnection(ICE);
     vpc = pc;
     pc.ontrack = (e) => {
       const v = $l('#lv-video');
@@ -67,9 +76,12 @@ const LIVE = (() => {
     await pc.setLocalDescription(ans);
     post({ t: 'answer', key, from: tabId, sdp: pc.localDescription.toJSON() });
   }
-  if (ch) ch.onmessage = (ev) => {
-    const m = ev.data || {};
+  function handle(m) {
+    if (!m || !m.mid || seen.has(m.mid)) return;
+    if (seen.size > 3000) seen.clear();
+    seen.add(m.mid);
     if (m.key !== key) return;
+    if (m.t === 'frame') { if (mode === 'view') showFrame(m.data); return; }
     if (mode === 'host') {
       if (m.t === 'join') hostOffer(m.vid).catch(() => {});
       if (m.t === 'answer' && peers[m.from]) peers[m.from].setRemoteDescription(m.sdp).catch(() => {});
@@ -82,7 +94,37 @@ const LIVE = (() => {
       if (m.t === 'ice' && m.to === tabId && vpc) { if (vRemote) vpc.addIceCandidate(m.c).catch(() => {}); else vQueue.push(m.c); }
       if (m.t === 'host-end') refresh();
     }
-  };
+  }
+  if (ch) ch.onmessage = (ev) => handle(ev.data);
+
+  // ---------- 映像が届かないときの予備：お店のカメラの静止画を約1秒ごとに送る ----------
+  function startFrames() {
+    stopFrames();
+    if (!stream || !stream.getVideoTracks().length) return;
+    capVideo = document.createElement('video');
+    capVideo.muted = true; capVideo.playsInline = true; capVideo.srcObject = stream; capVideo.play().catch(() => {});
+    const c = document.createElement('canvas');
+    frameKey = 'kd-live-frame:' + key;
+    frameTimer = setInterval(() => {
+      if (!capVideo || !capVideo.videoWidth) return;
+      const w = 240, h = Math.round(240 * capVideo.videoHeight / capVideo.videoWidth);
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(capVideo, 0, 0, w, h);
+      const data = c.toDataURL('image/jpeg', 0.55);
+      post({ t: 'frame', key, data });
+      try { localStorage.setItem(frameKey, data); } catch (e) { /* 容量が足りないときは送らない */ }
+    }, 900);
+  }
+  function stopFrames() {
+    clearInterval(frameTimer); frameTimer = null;
+    if (capVideo) { capVideo.srcObject = null; capVideo = null; }
+    if (frameKey) { try { localStorage.removeItem(frameKey); } catch (e) { /* */ } frameKey = null; }
+  }
+  function showFrame(data) {
+    if (!data || gotVideo) return;
+    const img = $l('#lv-frame');
+    if (img) { img.src = data; box.classList.add('has-frame'); }
+  }
 
   async function startCamera() {
     stopCamera();
@@ -96,7 +138,7 @@ const LIVE = (() => {
     if (v) { v.srcObject = stream; v.muted = true; v.play().catch(() => {}); }
     box.classList.add('has-video');
     // 配信中にカメラを切りかえたら、視聴者につなぎなおす
-    if (mode === 'host') Object.keys(peers).forEach((vid) => hostOffer(vid).catch(() => {}));
+    if (mode === 'host') { Object.keys(peers).forEach((vid) => hostOffer(vid).catch(() => {})); startFrames(); }
   }
   function stopCamera() {
     if (stream) stream.getTracks().forEach((tr) => tr.stop());
@@ -108,7 +150,8 @@ const LIVE = (() => {
   function shell(inner) {
     box.innerHTML = `<div class="lv-stage">
       <video id="lv-video" autoplay playsinline muted></video>
-      <div class="lv-novideo"><span>${mode === 'view' ? '映像を待っています…<br><small>映像は、お店と同じブラウザの別タブで見られます（デモ）</small>' : 'カメラの映像がここに出ます'}</span></div>
+      <img id="lv-frame" alt="">
+      <div class="lv-novideo"><span>${mode === 'view' ? 'お店の映像を待っています…<br><small>デモ版では、お店と同じパソコンの同じブラウザ（別のタブ）で見られます</small>' : 'カメラの映像がここに出ます'}</span></div>
       <div class="lv-shade"></div>
       ${inner}
       <div class="lv-hearts" id="lv-hearts"></div>
@@ -164,9 +207,10 @@ const LIVE = (() => {
         <span class="lv-badge">LIVE</span>
         <span class="lv-store">${esc(l.storeName)}</span>
         <span class="lv-meta" id="lv-meta"></span>
-        <button class="lv-x" data-lv="close" aria-label="${host ? '最小化' : '閉じる'}">×</button>
+        ${host ? `<button class="lv-endtop" data-lv="end">${state.confirmEnd ? 'もう一度押すと終了' : '配信を終了'}</button>` : ''}
+        <button class="lv-x" data-lv="close" aria-label="${host ? '画面を小さくする（配信は続く）' : '閉じる'}" title="${host ? '画面を小さくする（配信は続きます）' : '閉じる'}">×</button>
       </div>
-      <p class="lv-title">${esc(l.title)}</p>
+      <p class="lv-title">${esc(l.title)}${host ? '<small class="lv-hint">×で画面を閉じても配信は続きます。終わるときは「配信を終了」</small>' : ''}</p>
       <div class="lv-bottom">
         <ul class="lv-chat" id="lv-chat">${chatHtml(l.id)}</ul>
         <div id="lv-pin">${pinHtml(l, host)}</div>
@@ -175,7 +219,7 @@ const LIVE = (() => {
           <button type="submit" class="lv-send">送信</button>
           ${host ? '' : `<button type="button" class="lv-heart" data-lv="heart" aria-label="ハート">${HEART_SVG}</button>`}
         </form>
-        ${host ? `<div class="lv-host-actions"><button class="btn-soft" data-lv="flip">カメラを切りかえ</button><button class="btn lv-end" data-lv="end">${state.confirmEnd ? 'もう一度押すと終了' : 'ライブを終了'}</button></div>` : '<button class="lv-sound" data-lv="sound">音を出す</button>'}
+        ${host ? `<div class="lv-host-actions"><button class="btn-soft" data-lv="flip">カメラを切りかえ</button><button class="btn lv-end" data-lv="end">${state.confirmEnd ? 'もう一度押すと終了' : '配信を終了'}</button></div>` : '<button class="lv-sound" data-lv="sound">音を出す</button>'}
       </div>`);
     if (host && stream) { const v = $l('#lv-video'); v.srcObject = stream; v.play().catch(() => {}); box.classList.add('has-video'); }
     lastHearts = l.hearts || 0;
@@ -219,7 +263,7 @@ const LIVE = (() => {
     const chat = getChat(l.id);
     if (chat.length !== lastChat) { lastChat = chat.length; const c = $l('#lv-chat'); if (c) c.innerHTML = chatHtml(l.id); }
     if ((l.hearts || 0) > lastHearts) { floatHearts(l.hearts - lastHearts); lastHearts = l.hearts; }
-    const p = $l('#lv-pin'); if (p) p.innerHTML = pinHtml(l, mode === 'host');
+    const p = $l('#lv-pin'); if (p) { const h = pinHtml(l, mode === 'host'); if (p.dataset.h !== h) { p.innerHTML = h; p.dataset.h = h; } }
     meta();
   }
 
@@ -256,6 +300,7 @@ const LIVE = (() => {
     state.confirmEnd = false;
     drawLive();
     post({ t: 'host-up', key });
+    startFrames();
     clearInterval(timer); timer = setInterval(tick, 3000);
     updateLivePanel();
   }
@@ -269,6 +314,7 @@ const LIVE = (() => {
       delete all[key]; LIVES.save(all);
     }
     post({ t: 'host-end', key });
+    stopFrames();
     Object.values(peers).forEach((pc) => { try { pc.close(); } catch (e) { /* */ } });
     Object.keys(peers).forEach((k) => delete peers[k]);
     stopCamera();
@@ -282,10 +328,11 @@ const LIVE = (() => {
     const l = LIVES.all()[key];
     if (!liveOn(l)) return;
     drawLive();
+    try { showFrame(localStorage.getItem('kd-live-frame:' + key)); } catch (e) { /* */ }
     tick();
     clearInterval(timer); timer = setInterval(tick, 3000);
   }
-  function hide() { box.hidden = true; box.innerHTML = ''; document.body.classList.remove('lv-open'); box.classList.remove('has-video'); }
+  function hide() { box.hidden = true; box.innerHTML = ''; document.body.classList.remove('lv-open'); box.classList.remove('has-video', 'has-frame'); }
   function close() {
     if (mode === 'host') { hide(); updateLivePanel(); return; } // 配信は続ける（最小化）
     if (mode === 'setup') { stopCamera(); mode = null; hide(); return; }
@@ -309,7 +356,10 @@ const LIVE = (() => {
     if (a === 'close') close();
     if (a === 'go') go();
     if (a === 'flip') { facing = facing === 'environment' ? 'user' : 'environment'; startCamera().catch(() => {}); }
-    if (a === 'end') { if (!state.confirmEnd) { state.confirmEnd = true; t.textContent = 'もう一度押すと終了'; return; } state.confirmEnd = false; end(); }
+    if (a === 'end') {
+      if (!state.confirmEnd) { state.confirmEnd = true; box.querySelectorAll('[data-lv=end]').forEach((b) => { b.textContent = 'もう一度押すと終了'; }); setTimeout(() => { state.confirmEnd = false; box.querySelectorAll('[data-lv=end]').forEach((b) => { b.textContent = '配信を終了'; }); }, 4000); return; }
+      state.confirmEnd = false; end();
+    }
     if (a === 'heart') { updLive(key, (l) => { l.hearts = (l.hearts || 0) + 1; }); refresh(); }
     if (a === 'sound') { const v = $l('#lv-video'); if (v) { v.muted = false; v.play().catch(() => {}); } t.remove(); }
   });
@@ -325,18 +375,22 @@ const LIVE = (() => {
   });
   window.addEventListener('storage', (e) => {
     if (!e.key) return;
+    if (e.key === 'kd-live-sig' && e.newValue) { try { handle(JSON.parse(e.newValue)); } catch (err) { /* */ } return; }
+    if (mode === 'view' && e.key === 'kd-live-frame:' + key) { showFrame(e.newValue); return; }
     if (e.key === 'kd-lives' || e.key.startsWith('kd-live-chat:') || e.key === 'kd-shared-offers') {
       refresh();
       if (state.tab === 'shop' && e.key === 'kd-lives') renderLiveRow();
       if (state.tab === 'store' && e.key === 'kd-lives') updateLivePanel();
     }
   });
-  window.addEventListener('beforeunload', () => {
-    if (mode === 'host') { const all = LIVES.all(); if (all[key] && all[key].hostTab === tabId) { all[key].beat = 0; LIVES.save(all); } }
+  const bye = () => {
+    if (mode === 'host') { const all = LIVES.all(); if (all[key] && all[key].hostTab === tabId) { all[key].beat = 0; LIVES.save(all); } stopFrames(); }
     if (mode === 'view') post({ t: 'leave', key, vid: tabId });
-  });
+  };
+  window.addEventListener('beforeunload', bye);
+  window.addEventListener('pagehide', bye);
 
-  return { openHost, openViewer, isHosting: () => mode === 'host', tabId };
+  return { openHost, openViewer, end, isHosting: () => mode === 'host', tabId };
 })();
 
 // ---------- 利用者：どのお店が配信中か ----------
@@ -374,6 +428,10 @@ document.addEventListener('click', (e) => {
     const el = document.getElementById('offers'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   if (a === 'live-host') LIVE.openHost();
+  if (a === 'live-end') {
+    if (!state.confirmEndPanel) { state.confirmEndPanel = true; updateLivePanel(); setTimeout(() => { state.confirmEndPanel = false; updateLivePanel(); }, 4000); return; }
+    state.confirmEndPanel = false; LIVE.end();
+  }
 });
 
 // ---------- お店：ライブ配信のパネル ----------
@@ -391,7 +449,10 @@ function storeLivePanel() {
       ${on ? `<span class="lv-badge">LIVE</span>` : ''}
     </div>
     ${on ? `<p class="small">${mine ? '配信中です' : `${esc(l.hostName)}さんが配信中です`}：「${esc(l.title)}」・${liveViewers(l)}人が視聴中・ハート ${l.hearts || 0}</p>` : '<p class="muted small">ライブ中は、利用者の「かいもの」画面に LIVE が出ます。</p>'}
-    ${on && !mine ? '' : `<button class="btn" data-action="live-host">${mine ? 'ライブ画面にもどる' : 'ライブを始める'}</button>`}
+    <div class="acc-actions">
+      ${on && !mine ? '' : `<button class="btn" data-action="live-host">${mine ? 'ライブ画面にもどる' : 'ライブを始める'}</button>`}
+      ${mine ? `<button class="btn-soft danger" data-action="live-end">${state.confirmEndPanel ? 'もう一度押すと終了' : '配信を終了'}</button>` : ''}
+    </div>
     ${log.length ? `<ul class="lp-log">${log.map((x) => { const d = new Date(x.startedAt); const min = Math.max(1, Math.round((new Date(x.endedAt) - d) / 60000)); return `<li><span>${d.getMonth() + 1}/${d.getDate()} ${esc(x.title)}</span><span class="muted small">${min}分・最大${x.peak}人・ハート${x.hearts}・コメント${x.comments}</span></li>`; }).join('')}</ul>` : ''}
   </section>`;
 }

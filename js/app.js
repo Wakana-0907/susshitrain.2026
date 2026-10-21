@@ -424,7 +424,8 @@ const STAR = (on) => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidde
 
 function recipeCard(r) {
   const c = state.counts[r.id] || 0;
-  const uses = Object.entries(r.uses).map(([id, q]) => `${INGREDIENTS[id].name} ${fmtQty(id, q)}`).join('、');
+  const useList = Object.entries(r.uses).filter(([id]) => INGREDIENTS[id]);
+  const open = !!(state.openUses || {})[r.id];
   const fav = !!state.favs[r.id];
   const made = (state.madeCache || {})[r.id] || 0;
   return `
@@ -433,14 +434,16 @@ function recipeCard(r) {
       ${photoHtml(r.id, r.name, 'ph-recipe')}
       <div class="recipe-main">
         <h4>${esc(r.name)}${r.custom ? `<span class="tag-mini" data-tag="${r.tag}">${r.tag}</span>` : ''}${made ? `<span class="made-badge">${made}回</span>` : ''}</h4>
-        <p class="uses">${uses}</p>
+        <button class="uses-btn ${open ? 'is-open' : ''}" data-action="uses-toggle" data-id="${r.id}" aria-expanded="${open}" aria-controls="uses-${r.id}">${open ? '材料を閉じる' : `材料を見る（${useList.length}品）`}<span class="uses-caret" aria-hidden="true"></span></button>
+
         ${r.custom ? `<span class="rc-tools"><label class="link small rc-photo">写真を${USER_PHOTOS[r.id] ? '変える' : 'つける'}<input type="file" accept="image/*" data-photo-for="${r.id}" hidden></label>${USER_PHOTOS[r.id] ? `<button class="link small" data-action="photo-del" data-id="${r.id}">写真を外す</button>` : ''}<button class="link small" data-action="del-recipe" data-id="${r.id}">削除</button></span>` : ''}
+        <div class="stepper" aria-label="${esc(r.name)}の回数">
+          <button data-action="dec" data-id="${r.id}" aria-label="へらす" ${c ? '' : 'disabled'}>−</button>
+          <span class="count">${c}</span>
+          <button data-action="inc" data-id="${r.id}" aria-label="ふやす">＋</button>
+        </div>
       </div>
-      <div class="stepper" aria-label="${esc(r.name)}の回数">
-        <button data-action="dec" data-id="${r.id}" aria-label="へらす" ${c ? '' : 'disabled'}>−</button>
-        <span class="count">${c}</span>
-        <button data-action="inc" data-id="${r.id}" aria-label="ふやす">＋</button>
-      </div>
+      ${open ? `<ul class="uses-list" id="uses-${r.id}">${useList.map(([id, q]) => `<li>${photoHtml(id, INGREDIENTS[id].name, 'ph-use')}<span class="u-name">${esc(INGREDIENTS[id].name)}</span><span class="u-qty">${fmtQty(id, q)}</span></li>`).join('')}<li class="u-note">1人分・米と調味料はのぞく</li></ul>` : ''}
     </article>`;
 }
 
@@ -1979,6 +1982,7 @@ document.addEventListener('click', (e) => {
     if (m) { state.counts = {}; for (const [rid, c] of Object.entries(m.counts)) if (RECIPES.find((r) => r.id === rid)) state.counts[rid] = c; state.tagFilter = 'picked'; state.justRecorded = null; }
   }
   if (a === 'trend-tab') { state.trendTab = t.dataset.k; render(); return; }
+  if (a === 'uses-toggle') { state.openUses = state.openUses || {}; if (state.openUses[id]) delete state.openUses[id]; else state.openUses[id] = true; renderRecipes(); return; }
   if (a === 'tag-filter') { state.tagFilter = t.dataset.k; renderRecipes(); return; }
   if (a === 'tick') {
     if (state.bought[id]) delete state.bought[id];
