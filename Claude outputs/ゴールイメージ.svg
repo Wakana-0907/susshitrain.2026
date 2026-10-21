@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 390" width="700" height="390" font-family="Noto Sans CJK JP, sans-serif" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <!-- 学生 -->
+      <circle cx="92" cy="118" r="30" fill="#fde7d4" stroke="#24323a" stroke-width="3"/>
+      <path d="M78 114c2-2 5-2 7 0M101 114c2-2 5-2 7 0M84 128c5 4 12 4 17 0" stroke="#24323a" stroke-width="2.5"/>
+      <path d="M62 112c4-20 22-28 38-24 12 3 20 12 22 22" stroke="#24323a" stroke-width="3" fill="#5b4636"/>
+      <path d="M58 220c0-40 14-62 34-62s34 22 34 62z" fill="#cfe4f2" stroke="#24323a" stroke-width="3"/>
+      <text x="92" y="44" text-anchor="middle" font-size="20" font-weight="900" fill="#24323a">一人暮らし</text><text x="92" y="68" text-anchor="middle" font-size="20" font-weight="900" fill="#24323a">の学生</text>
+      <!-- スマホ -->
+      <rect x="296" y="62" width="108" height="190" rx="16" fill="#fff" stroke="#24323a" stroke-width="3.5"/>
+      <rect x="308" y="84" width="84" height="18" rx="5" fill="#4a90b8"/>
+      <rect x="308" y="110" width="84" height="40" rx="7" fill="#e4f0f7" stroke="#4a90b8" stroke-width="2"/>
+      <text x="350" y="137" text-anchor="middle" font-size="17" font-weight="900" fill="#3a7aa0">¥2,444</text>
+      <rect x="308" y="158" width="84" height="12" rx="4" fill="#fdf3dc"/><rect x="308" y="176" width="64" height="12" rx="4" fill="#e6f4ec"/>
+      <path d="M318 206h64l-6 26h-52z" fill="#fdf3dc" stroke="#24323a" stroke-width="2"/><path d="M340 206c0-10 6-16 12-20" stroke="#5fa77f" stroke-width="2.5"/>
+      <text x="350" y="280" text-anchor="middle" font-size="21" font-weight="900" fill="#3a7aa0">こんだて逆算ノート</text>
+      <!-- スーパー -->
+      <path d="M548 228V128h112v100z" fill="#fff" stroke="#24323a" stroke-width="3"/>
+      <path d="M538 128l12-34h108l12 34z" fill="#f6c9a6" stroke="#24323a" stroke-width="3"/>
+      <path d="M560 106h88" stroke="#e07a5f" stroke-width="10"/>
+      <rect x="568" y="160" width="32" height="68" fill="#e4f0f7" stroke="#24323a" stroke-width="2.5"/>
+      <rect x="616" y="150" width="30" height="26" fill="#e4f0f7" stroke="#24323a" stroke-width="2.5"/>
+      <text x="604" y="258" text-anchor="middle" font-size="21" font-weight="900" fill="#24323a">スーパー</text>
+      <!-- 矢印 -->
+      <path d="M134 108c52-30 104-34 152-20" stroke="#4a90b8" stroke-width="3.5"/><path d="M276 80l12 8-13 6" stroke="#4a90b8" stroke-width="3.5"/>
+      <text x="222" y="70" text-anchor="middle" font-size="19" font-weight="700" fill="#24323a">作りたい献立</text>
+      <path d="M288 196c-50 22-104 24-154 8" stroke="#e9a23b" stroke-width="3.5"/><path d="M146 196l-13 8 14 6" stroke="#e9a23b" stroke-width="3.5"/>
+      <text x="176" y="244" text-anchor="middle" font-size="18" font-weight="700" fill="#24323a">最安の買い方・使い切り</text>
+      <path d="M412 104c44-24 86-22 120-4" stroke="#4a90b8" stroke-width="3.5"/><path d="M522 92l12 8-14 5" stroke="#4a90b8" stroke-width="3.5"/>
+      <text x="478" y="58" text-anchor="middle" font-size="18" font-weight="700" fill="#24323a">来店前の献立データ</text>
+      <text x="478" y="80" text-anchor="middle" font-size="16" fill="#6b7c86">（需要予測）</text>
+      <path d="M560 268c-120 90-330 96-440 0" stroke="#5fa77f" stroke-width="3.5" stroke-dasharray="2 9"/><path d="M128 280l-12-12 2 16" stroke="#5fa77f" stroke-width="3.5"/>
+      <text x="350" y="372" text-anchor="middle" font-size="19" font-weight="700" fill="#24323a">売れ残りは値引き・ライブで配信 → 取り置き</text>
+      <!-- わけあい -->
+      <circle cx="40" cy="300" r="16" fill="#fde7d4" stroke="#24323a" stroke-width="2.5"/>
+      <path d="M22 356c0-24 8-36 18-36s18 12 18 36z" fill="#e6f4ec" stroke="#24323a" stroke-width="2.5"/>
+      <path d="M58 312c10-8 16-12 26-12" stroke="#24323a" stroke-width="2" stroke-dasharray="3 4"/>
+      <text x="40" y="378" text-anchor="middle" font-size="16" font-weight="700" fill="#3f8a60">わけあい</text>
+    </svg>
