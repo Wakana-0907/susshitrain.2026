@@ -28,6 +28,8 @@ const SHARED_OFFERS = {
 };
 // 配信の期限・状態
 const OFFER_UNTIL = { today: '今日いっぱい', tomorrow: '明日の21時まで', two: 'あさっての21時まで' };
+// 期限：日（0=今日・1=明日・2=あさって）と時刻（1時間ごと）
+function untilAt(day, hour) { const d = new Date(); d.setDate(d.getDate() + Number(day)); d.setHours(Number(hour), 0, 0, 0); return d.toISOString(); }
 function untilDate(k) {
   const d = new Date();
   if (k === 'today') d.setHours(23, 59, 0, 0); else { d.setDate(d.getDate() + (k === 'two' ? 2 : 1)); d.setHours(21, 0, 0, 0); }
@@ -49,6 +51,7 @@ function fmtDay(ds) {
   const diff = Math.round((new Date(y, m - 1, d) - new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())) / 864e5);
   return `${m}/${d}${diff === 0 ? '（今日）' : diff === 1 ? '（明日）' : ''}`;
 }
+function shortDay(ds) { const t = fmtDay(ds); return t.includes('（今日）') ? '今日' : t.includes('（明日）') ? '明日' : t; }
 function newPickupCode(o) {
   const used = new Set((o.reservations || []).map((r) => r.code));
   for (let i = 0; i < 50; i++) {
@@ -108,8 +111,29 @@ const customIngs = LS.get('kd-ings', {});
 const customRecipes = LS.get('kd-recipes', []);
 Object.assign(INGREDIENTS, customIngs);
 customRecipes.forEach((r) => RECIPES.push(r));
+Object.assign(USER_PHOTOS, LS.get('kd-photos', {}));
+// 写真を正方形に切り取り、小さくしてから保存する（端末の保存容量を使いすぎないように）
+function readPhoto(file) {
+  return new Promise((res, rej) => {
+    if (!file || !/^image\//.test(file.type || 'image/')) { rej(new Error('type')); return; }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const S = 360, s = Math.min(img.naturalWidth, img.naturalHeight);
+      const c = document.createElement('canvas'); c.width = S; c.height = S;
+      c.getContext('2d').drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, S, S);
+      URL.revokeObjectURL(url);
+      res(c.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('load')); };
+    img.src = url;
+  });
+}
+function saveUserPhotos() {
+  try { localStorage.setItem(KD_PREFIX + 'kd-photos', JSON.stringify(USER_PHOTOS)); return true; } catch (e) { return false; }
+}
 
-const emptyForm = () => ({ open: false, name: '', tag: '主菜', rows: [{ id: '', qty: '' }], pending: {}, status: '', busy: false });
+const emptyForm = () => ({ open: false, name: '', tag: '主菜', rows: [{ id: '', qty: '' }], pending: {}, status: '', busy: false, photo: '' });
 
 const state = {
   tab: ALLOWED_TABS[0],
@@ -406,10 +430,11 @@ function recipeCard(r) {
   return `
     <article class="recipe ${c ? 'is-on' : ''}" data-tag="${r.tag}">
       <button class="fav-btn ${fav ? 'is-on' : ''}" data-action="fav" data-id="${r.id}" aria-pressed="${fav}" aria-label="${esc(r.name)}をお気に入り${fav ? 'から外す' : 'に登録'}">${STAR(fav)}</button>
+      ${photoHtml(r.id, r.name, 'ph-recipe')}
       <div class="recipe-main">
         <h4>${esc(r.name)}${r.custom ? `<span class="tag-mini" data-tag="${r.tag}">${r.tag}</span>` : ''}${made ? `<span class="made-badge">${made}回</span>` : ''}</h4>
         <p class="uses">${uses}</p>
-        ${r.custom ? `<button class="link small" data-action="del-recipe" data-id="${r.id}">削除</button>` : ''}
+        ${r.custom ? `<span class="rc-tools"><label class="link small rc-photo">写真を${USER_PHOTOS[r.id] ? '変える' : 'つける'}<input type="file" accept="image/*" data-photo-for="${r.id}" hidden></label>${USER_PHOTOS[r.id] ? `<button class="link small" data-action="photo-del" data-id="${r.id}">写真を外す</button>` : ''}<button class="link small" data-action="del-recipe" data-id="${r.id}">削除</button></span>` : ''}
       </div>
       <div class="stepper" aria-label="${esc(r.name)}の回数">
         <button data-action="dec" data-id="${r.id}" aria-label="へらす" ${c ? '' : 'disabled'}>−</button>
@@ -463,7 +488,7 @@ function renderRecipes() {
     if (f === 'all' || f === 'mine') html += group('じぶんの献立', 'mine', mine);
     if (f !== 'mine') html += TAG_ORDER.filter((t) => f === 'all' || f === t).map((t) => group(t, t, RECIPES.filter((r) => r.tag === t && !r.custom))).join('');
   }
-  $('#recipes').innerHTML = html;
+  $('#recipes').innerHTML = (state.photoMsg ? `<p class="small warn">${esc(state.photoMsg)}</p>` : '') + html;
 }
 
 function renderOffers() {
@@ -477,13 +502,16 @@ function renderOffers() {
       ${live.map((o) => {
         const s = storeById(o.store), ing = INGREDIENTS[o.ing];
         const rs = (o.recipes || []).map((id) => RECIPES.find((r) => r.id === id));
-        return `<div class="offer-row">
+        return `<div class="offer-row has-ph">
+          ${photoHtml(o.ing, ing.name, 'ph-offer')}
+          <div class="offer-body">
           <p><b>${s.name}</b>で <b>${ing.name}</b> が <span class="off">${Math.round(o.discount * 100)}%オフ</span>
           <span class="muted">${yen(basePrice(o.ing, o.store))} → ${yen(priceOf(o.ing, o.store))}</span></p>
           ${o.message ? `<p class="offer-msg small">「${esc(o.message)}」</p>` : ''}
           ${o.slots && o.slots.length ? offerSlotHtml(o) : ''}
           ${o.until ? `<p class="muted small">${fmtUntil(o.until)}</p>` : ''}
           <p class="offer-recipes">${rs.filter(Boolean).map((r) => `<button class="chip" data-action="inc" data-id="${r.id}">＋ ${esc(r.name)}</button>`).join('')}</p>
+          </div>
         </div>`;
       }).join('')}
       ${state.reserveMsg ? `<p class="small warn">${esc(state.reserveMsg)}</p>` : ''}
@@ -499,7 +527,7 @@ function offerSlotHtml(o) {
     return `<div class="pickup ${expired ? 'is-expired' : ''}">
       <p class="small"><span class="tag-share">取り置き済み</span> ${fmtDay(mine.day || dayStr())} ${mine.h}時台に受け取り</p>
       ${mine.code ? `<p class="pickup-code" aria-label="受け取りコード">${mine.code.split('').map((c) => `<span>${c}</span>`).join('')}</p>
-      <p class="muted small">${expired ? 'このコードの期限は過ぎました。' : `レジでこの番号を伝えてください。${fmtDay(mine.day || dayStr())}だけ使えます。ほかの人には見えません。`}</p>` : ''}
+      <p class="muted small">${expired ? 'このコードの期限は過ぎました。' : `レジでこの番号を伝えてください。${fmtDay(mine.day || dayStr())}だけ使えます。${o.codeMode === 'shop' ? 'お店が決めた受け取りコードです。' : 'あなただけのコードで、ほかの人には見えません。'}`}</p>` : ''}
       <button class="link small" data-action="reserve" data-id="${o.id}">取り置きを取り消す</button>
     </div>`;
   }
@@ -792,7 +820,7 @@ function renderPantry() {
       const ing = INGREDIENTS[id];
       const days = state.pantryDates[id] ? Math.floor((now - new Date(state.pantryDates[id]).getTime()) / 86400000) : null;
       const old = ing.keep === 'short' && days !== null && days >= 3;
-      return `<span class="lo-chip lo-${ing.keep} ${old ? 'is-old' : ''}">${esc(ing.name)} ${fmtQty(id, state.pantry[id])}${days !== null ? `<small>${days ? days + '日前' : '今日'}${old ? '・早めに' : ''}</small>` : ''}<button class="x" data-action="pantry-del" data-id="${id}" aria-label="${esc(ing.name)}を使い切った">×</button></span>`;
+      return `<span class="lo-chip lo-${ing.keep} ${old ? 'is-old' : ''}">${photoHtml(id, ing.name, 'ph-xs')}${esc(ing.name)} ${fmtQty(id, state.pantry[id])}${days !== null ? `<small>${days ? days + '日前' : '今日'}${old ? '・早めに' : ''}</small>` : ''}<button class="x" data-action="pantry-del" data-id="${id}" aria-label="${esc(ing.name)}を使い切った">×</button></span>`;
     }).join('')}</p>` : '<p class="muted small">まだありません。「買った！記録する」を押すと、余った食材がここに入ります。</p>'}
     <details ${state.pantryOpen ? 'open' : ''} id="pantry-details">
       <summary class="small">＋ 家にある食材を追加</summary>
@@ -824,6 +852,7 @@ function listRow(it, sid) {
   return `<li class="buy-row ${b ? (b.skipped ? 'is-skip' : 'is-done') : ''}">
     <div class="br-main">
       <button class="tick" data-action="tick" data-id="${it.id}" data-store="${sid}" aria-pressed="${!!b}" aria-label="${esc(ing.name)}を買った">${b ? '✓' : ''}</button>
+      ${photoHtml(it.id, ing.name, 'ph-sm')}
       <span class="br-name">${esc(ing.name)}<span class="muted small">（${esc(ing.packLabel)}${it.packs > 1 ? '×' + it.packs : ''}）</span>${tags}${note}</span>
       <span class="num br-price">${b && !b.skipped ? yen(b.price) : yen(planned)}</span>
       <button class="link small" data-action="edit-bought" data-id="${it.id}" data-store="${sid}">${editing ? '閉じる' : '変更'}</button>
@@ -1225,8 +1254,9 @@ function newDraft(r, sid) {
   const slots = {};
   OFFER_HOURS.forEach((h) => { const p = plan.slots.find((x) => x.h === h); slots[h] = { on: !!p, limit: p ? p.limit : Math.max(1, Math.round(plan.respond / 3)) }; });
   return {
-    ing: r.id, discount: r.ratio > 1.5 ? 0.3 : 0.2, slots, until: 'tomorrow',
+    ing: r.id, discount: r.ratio > 1.5 ? 0.3 : 0.2, slots, untilDay: 1, untilHour: 21,
     recipes: Object.fromEntries(recs.slice(0, 2).map((x) => [x.id, true])),
+    codeMode: 'auto', shopCode: '',
     msg: `${INGREDIENTS[r.id].name}が多めに入荷しています。${recs[0] ? `「${recs[0].name}」などにどうぞ。` : ''}`,
   };
 }
@@ -1244,6 +1274,13 @@ function storeOfferCard(r, sid) {
       <p class="small">取り置き <b>${taken}</b> / ${live.qty}個　<span class="muted">受け取り済み ${(live.reservations || []).filter((x) => x.picked).length}個</span></p>
       <div class="take-bar"><span style="width:${Math.min(100, (taken / Math.max(1, live.qty)) * 100)}%"></span></div>
       <p class="small slot-line">${live.slots.map((x) => { const n = offerTaken(live, x.h); return `<span class="slot ${n >= x.limit ? 'is-full' : ''}">${x.h}時台 ${n}/${x.limit}${n >= x.limit ? ' 満' : ''}</span>`; }).join('')}</p>
+      <p class="small">受け取りコード：${live.codeMode === 'shop' ? `<b class="code-inline">${esc(live.shopCode)}</b> <span class="muted">（お店で決めたコード・全員共通）</span>` : '<span class="muted">自動（1人ずつちがう4桁）</span>'}</p>
+      ${(live.reservations || []).length ? `<details class="rsv-list" ${state.rsvOpen === live.id ? 'open' : ''} data-rsv="${live.id}"><summary class="small">取り置きの一覧（${live.reservations.length}件）</summary>
+        <table class="r-table"><thead><tr><th>受け取り</th><th>名前</th><th>コード</th><th>状態</th></tr></thead><tbody>
+        ${live.reservations.map((x, i) => ({ x, i })).sort((a, b) => (a.x.day || '').localeCompare(b.x.day || '') || a.x.h - b.x.h).map(({ x, i }) => `<tr class="${x.picked ? 'is-picked' : ''}">
+          <td>${shortDay(x.day || dayStr())} ${x.h}時</td><td>${esc(x.name || '—')}</td><td class="num"><b class="code-inline">${esc(x.code || '—')}</b></td>
+          <td>${x.picked ? `<span class="tag-share">済</span> <button class="link small" data-action="offer-pick" data-id="${live.id}" data-i="${i}">もどす</button>` : `<button class="chip" data-action="offer-pick" data-id="${live.id}" data-i="${i}">渡した</button>`}</td>
+        </tr>`).join('')}</tbody></table></details>` : ''}
       <div class="pickup-check">
         <label class="acc-label" for="pc-${live.id}">受け取りの確認 <span class="muted small">お客さんの4桁のコードを入力</span></label>
         <div class="acc-inline"><input id="pc-${live.id}" class="pc-input" type="text" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off"><button class="btn" data-action="offer-pickup" data-id="${live.id}">確認</button></div>
@@ -1279,7 +1316,11 @@ function offerEditor(r, sid, d) {
 
     <p class="acc-label">値引き</p>
     <div class="dr-pills">${[0.1, 0.2, 0.3, 0.4, 0.5].map((x) => `<button class="pill-s ${Math.abs(d.discount - x) < 0.001 ? 'is-on' : ''}" data-action="dr-discount" data-v="${x}">${Math.round(x * 100)}%</button>`).join('')}</div>
-    <p class="muted small">${yen(base)} → <b>${yen(Math.round(base * (1 - d.discount)))}</b></p>
+    <div class="dr-disc">
+      <input type="range" min="1" max="90" step="1" value="${Math.round(d.discount * 100)}" data-dr="discount" aria-label="値引き率">
+      <label class="dr-disc-num"><input type="number" min="1" max="90" step="1" value="${Math.round(d.discount * 100)}" data-dr="discount-num" aria-label="値引き率（%）">%オフ</label>
+    </div>
+    <p class="muted small" data-base="${base}" id="dr-price">${yen(base)} → <b>${yen(Math.round(base * (1 - d.discount)))}</b>（1%ずつ変えられます）</p>
 
     <p class="acc-label">取り置きの時間帯と個数 <span class="muted small">空いている時間帯に分けると混みません</span></p>
     <div class="dr-slots">${OFFER_HOURS.map((h) => `<label class="dr-slot ${d.slots[h].on ? 'is-on' : ''}">
@@ -1287,10 +1328,21 @@ function offerEditor(r, sid, d) {
       <span>${h}時台${quiet.includes(h) ? '<i class="quiet">すいている</i>' : ''}</span>
       <input type="number" min="1" max="99" data-dr="slot-limit" data-h="${h}" value="${d.slots[h].limit}" ${d.slots[h].on ? '' : 'disabled'}><span class="small">個</span>
     </label>`).join('')}</div>
-    <p class="small">合計 <b>${qty}</b>個 ${qty > r.excess ? '<span class="warn">（余りそうな数より多いです）</span>' : `<span class="muted">（余りそうな数 ${r.excess}${unit}）</span>`}</p>
+    <p class="small" id="dr-total" data-excess="${r.excess}" data-unit="${unit}">合計 <b>${qty}</b>個 ${qty > r.excess ? '<span class="warn">（余りそうな数より多いです）</span>' : `<span class="muted">（余りそうな数 ${r.excess}${unit}）</span>`}</p>
+
+    <p class="acc-label">受け取りコード</p>
+    <div class="acc-radios dr-code">
+      <label><input type="radio" name="dr-code" data-dr="codeMode" value="auto" ${d.codeMode !== 'shop' ? 'checked' : ''}>自動で作る<span class="muted small">（1人ずつちがう4桁）</span></label>
+      <label><input type="radio" name="dr-code" data-dr="codeMode" value="shop" ${d.codeMode === 'shop' ? 'checked' : ''}>お店で決める<span class="muted small">（取り置きした人みんな同じ4桁）</span></label>
+    </div>
+    ${d.codeMode === 'shop' ? `<div class="acc-inline"><input class="pc-input" type="text" inputmode="numeric" maxlength="4" placeholder="0000" data-dr="shopCode" value="${esc(d.shopCode)}"><button class="link small" data-action="dr-code-random">ランダムで決める</button></div>` : ''}
 
     <p class="acc-label">配信の期限</p>
-    <select data-dr="until">${Object.entries(OFFER_UNTIL).map(([k, t]) => `<option value="${k}" ${d.until === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
+    <div class="dr-until">
+      <select data-dr="untilDay" aria-label="期限の日">${['今日', '明日', 'あさって'].map((t, i) => `<option value="${i}" ${Number(d.untilDay) === i ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      <select data-dr="untilHour" aria-label="期限の時刻">${Array.from({ length: 24 }, (_, h) => h).map((h) => { const past = Number(d.untilDay) === 0 && h <= new Date().getHours(); return `<option value="${h}" ${Number(d.untilHour) === h ? 'selected' : ''} ${past ? 'disabled' : ''}>${h}:00</option>`; }).join('')}</select>
+      <span class="small">まで</span>
+    </div>
 
     <p class="acc-label">一緒におすすめする献立</p>
     <div class="dr-recipes">${recs.map((x) => `<label><input type="checkbox" data-dr="recipe" data-id="${x.id}" ${d.recipes[x.id] ? 'checked' : ''}>${esc(x.name)}</label>`).join('')}</div>
@@ -1300,10 +1352,10 @@ function offerEditor(r, sid, d) {
 
     <p class="acc-label">利用者に見える内容</p>
     <div class="offer-card offer-preview"><div class="offer-row">
-      <p><b>${esc(storeById(sid).name)}</b>で <b>${r.ing.name}</b> が <span class="off">${Math.round(d.discount * 100)}%オフ</span> <span class="muted">${yen(base)} → ${yen(Math.round(base * (1 - d.discount)))}</span></p>
-      ${d.msg.trim() ? `<p class="offer-msg small">「${esc(d.msg.trim())}」</p>` : ''}
+      <p><b>${esc(storeById(sid).name)}</b>で <b>${r.ing.name}</b> が <span class="off" id="dr-prev-off">${Math.round(d.discount * 100)}%オフ</span> <span class="muted" id="dr-prev-price">${yen(base)} → ${yen(Math.round(base * (1 - d.discount)))}</span></p>
+      <p class="offer-msg small" id="dr-prev-msg" ${d.msg.trim() ? '' : 'hidden'}>「${esc(d.msg.trim())}」</p>
       <p class="offer-slot small">あなたへの配信枠：<b>${(OFFER_HOURS.find((h) => d.slots[h].on) || '-')}時台</b> などに分けて配信　<span class="chip">取り置きする</span></p>
-      <p class="muted small">${fmtUntil(untilDate(d.until))}</p>
+      <p class="muted small">${fmtUntil(untilAt(d.untilDay, d.untilHour))}</p>
       <p class="offer-recipes">${pickedRecs.map((x) => `<span class="chip">＋ ${esc(x.name)}</span>`).join('')}</p>
     </div></div>
 
@@ -1536,6 +1588,15 @@ function renderForm() {
     <div class="f-tags">
       ${TAGS.map((t) => `<label class="f-tag"><input type="radio" name="f-tag" data-f="tag" value="${t}" ${f.tag === t ? 'checked' : ''}><span data-tag="${t}">${t}</span></label>`).join('')}
     </div>
+    <div class="f-photo">
+      ${f.photo ? `<span class="ph ph-recipe ph-user"><img src="${f.photo}" alt="えらんだ写真"></span>` : `<span class="ph ph-recipe ph-none">${NO_IMAGE}</span>`}
+      <div class="f-photo-btns">
+        <p class="small"><b>写真</b> <span class="muted">（任意）</span></p>
+        <label class="btn-soft f-pick">写真をえらぶ<input type="file" accept="image/*" data-f-photo hidden></label>
+        <label class="btn-soft f-pick">カメラで撮る<input type="file" accept="image/*" capture="environment" data-f-photo hidden></label>
+        ${f.photo ? '<button class="link small" data-action="form-photo-del">写真を外す</button>' : ''}
+      </div>
+    </div>
     <p class="muted small">食材と分量（1人分）。米と調味料は入れなくて大丈夫です。</p>
     <div class="f-rows">${rows}</div>
     <button class="link small" data-action="row-add">＋ 食材を足す</button>
@@ -1657,6 +1718,10 @@ function saveForm() {
   RECIPES.push(recipe);
   customRecipes.push(recipe);
   state.counts[recipe.id] = 1;
+  if (f.photo) {
+    USER_PHOTOS[recipe.id] = f.photo;
+    if (!saveUserPhotos()) { delete USER_PHOTOS[recipe.id]; state.photoMsg = '端末の保存容量がいっぱいで、写真は保存できませんでした（献立は保存しました）。'; }
+  }
   state.form = emptyForm();
   save();
   renderForm();
@@ -1669,6 +1734,7 @@ function deleteRecipe(id) {
   const j = customRecipes.findIndex((r) => r.id === id);
   if (j >= 0) customRecipes.splice(j, 1);
   delete state.counts[id];
+  if (USER_PHOTOS[id]) { delete USER_PHOTOS[id]; saveUserPhotos(); }
 }
 
 // ---------- アカウント ----------
@@ -1772,6 +1838,14 @@ function renderAccount() {
     </section>
 
     <section class="acc-card">
+      <h3>写真のクレジット</h3>
+      <p class="muted small">献立と食材の写真は Wikimedia Commons のものを使っています（CC0・パブリックドメイン・CC BY・CC BY-SA）。「イメージ」は、献立に近い料理の写真です。</p>
+      <details class="credits"><summary class="small">一覧を見る（${Object.keys(PHOTOS).length}枚）</summary>
+        <ul>${Object.entries(PHOTOS).map(([id, p]) => { const name = (RECIPES.find((r) => r.id === id) || INGREDIENTS[id] || {}).name || id; return `<li><b>${esc(name)}</b>${p.note ? `<span class="muted">（${p.note}）</span>` : ''}：<a href="${p.page}" target="_blank" rel="noopener">${esc(p.title)}</a> / ${esc(p.author)} / ${esc(p.license)}</li>`; }).join('')}</ul>
+      </details>
+    </section>
+
+    <section class="acc-card">
       <h3>使い方</h3>
       <p class="muted small">はじめに表示された使い方の説明を、もう一度見られます。</p>
       <button class="btn-soft" data-action="open-tutorial">使い方（チュートリアル）を見る</button>
@@ -1834,6 +1908,8 @@ document.addEventListener('click', (e) => {
   const f = state.form;
   if (a === 'form-open') { f.open = true; renderForm(); $('#add-form input[data-f=name]').focus(); return; }
   if (a === 'form-close') { state.form = emptyForm(); renderForm(); return; }
+  if (a === 'form-photo-del') { f.photo = ''; renderForm(); return; }
+  if (a === 'photo-del') { delete USER_PHOTOS[id]; saveUserPhotos(); renderRecipes(); return; }
   if (a === 'row-add') { f.rows.push({ id: '', qty: '' }); renderForm(); return; }
   if (a === 'row-del') { f.rows.splice(Number(t.dataset.i), 1); if (!f.rows.length) f.rows.push({ id: '', qty: '' }); renderForm(); return; }
   if (a === 'ai-fill') { aiFill(); return; }
@@ -1958,7 +2034,7 @@ document.addEventListener('click', (e) => {
       if (mine >= 0) { o.reservations.splice(mine, 1); return; }
       const h = Number(t.dataset.h), sl = o.slots.find((x) => x.h === h);
       if (!sl || offerTaken(o, h) >= sl.limit) { state.reserveMsg = 'ちょうど埋まってしまいました。ほかの時間帯を見てください。'; return; }
-      o.reservations.push({ uid: AUTH.user.id, h, at: new Date().toISOString(), code: newPickupCode(o), day: pickupDay(h) });
+      o.reservations.push({ uid: AUTH.user.id, name: AUTH.user.guest ? 'ゲスト' : (AUTH.user.name || ''), h, at: new Date().toISOString(), code: o.codeMode === 'shop' && o.shopCode ? o.shopCode : newPickupCode(o), day: pickupDay(h) });
     });
   }
   if (a === 'receipt-sample') { state.receipt.store = 'B'; state.receipt.text = SAMPLE_RECEIPT; state.receipt.result = null; }
@@ -1968,25 +2044,30 @@ document.addEventListener('click', (e) => {
   if (a === 'dec') { state.counts[id] = Math.max(0, (state.counts[id] || 0) - 1); if (!state.counts[id]) delete state.counts[id]; }
   if (a === 'clear') state.counts = {};
   if (a === 'sample') state.counts = { ...SAMPLE_MENU };
-  if ((a && a.startsWith('offer-')) || a === 'dr-discount') {
+  if ((a && a.startsWith('offer-')) || a === 'dr-discount' || a === 'dr-code-random') {
     if (!IS_STORE || !MY_STORE) return;
     const sid = MY_STORE.slot;
     state.draftMsg = '';
     if (a === 'offer-draft') { const r = storeDemand(sid).find((x) => x.id === t.dataset.ing); if (r) state.draft = newDraft(r, sid); }
     if (a === 'offer-cancel') state.draft = null;
     if (a === 'dr-discount' && state.draft) state.draft.discount = Number(t.dataset.v);
+    if (a === 'dr-code-random' && state.draft) state.draft.shopCode = newPickupCode({ reservations: [] });
+    if (a === 'offer-pick') {
+      mutateOffers((list) => { const o = list.find((x) => x.id === id); const r = o && (o.reservations || [])[Number(t.dataset.i)]; if (r) { r.picked = !r.picked; r.pickedAt = r.picked ? new Date().toISOString() : null; } });
+    }
     if (a === 'offer-pickup') {
       const inp = $('#pc-' + id), code = (inp ? inp.value : '').replace(/\D/g, '');
       const result = mutateOffers((list) => {
         const o = list.find((x) => x.id === id);
         if (!o) return { ok: false, text: '配信が見つかりません。' };
         if (code.length !== 4) return { ok: false, text: '4桁の数字を入れてください。' };
-        const r = (o.reservations || []).find((x) => x.code === code);
+        const hits = (o.reservations || []).filter((x) => x.code === code).sort((a, b) => (a.picked - b.picked) || (a.day === dayStr() ? -1 : 1) || a.h - b.h);
+        const r = hits.find((x) => !x.picked && (!x.day || x.day === dayStr())) || hits[0];
         if (!r) return { ok: false, text: `${code} の取り置きはありません。` };
         if (r.picked) return { ok: false, text: `${code} はもう受け取り済みです。` };
         if (r.day && r.day !== dayStr()) return { ok: false, text: `${code} は ${fmtDay(r.day)} に使うコードです。` };
         r.picked = true; r.pickedAt = new Date().toISOString();
-        return { ok: true, text: `OK：${code}（${r.h}時台の取り置き）を受け取り済みにしました。${INGREDIENTS[o.ing].name}を渡してください。` };
+        return { ok: true, text: `OK：${code}（${r.name ? r.name + 'さん・' : ''}${r.h}時台の取り置き）を受け取り済みにしました。${INGREDIENTS[o.ing].name}を渡してください。` };
       });
       state.pickupMsg = Object.assign({ id }, result);
       renderStore(); return;
@@ -2001,13 +2082,18 @@ document.addEventListener('click', (e) => {
       if (msgEl) d.msg = msgEl.value;
       const slots = OFFER_HOURS.filter((h) => d.slots[h].on).map((h) => ({ h, limit: Math.max(1, Math.round(Number(d.slots[h].limit) || 1)) }));
       if (!slots.length) { state.draftMsg = '取り置きの時間帯を1つ以上えらんでください。'; renderStore(); return; }
+      if (new Date(untilAt(d.untilDay, d.untilHour)).getTime() <= Date.now()) { state.draftMsg = '配信の期限が過ぎた時刻になっています。期限を選びなおしてください。'; renderStore(); return; }
+      const codeEl = document.querySelector('[data-dr=shopCode]');
+      if (codeEl) d.shopCode = codeEl.value.replace(/\D/g, '');
+      if (d.codeMode === 'shop' && !/^\d{4}$/.test(d.shopCode)) { state.draftMsg = '受け取りコードを4桁の数字で決めてください。'; renderStore(); return; }
       const ing = d.ing;
       mutateOffers((list) => {
         list.forEach((o) => { if (o.store === sid && o.ing === ing && offerLive(o)) { o.status = 'ended'; o.endedAt = new Date().toISOString(); } });
         list.push({
           id: 'o' + Date.now().toString(36), store: sid, ing, discount: d.discount,
           recipes: Object.keys(d.recipes).filter((k) => d.recipes[k]), slots, qty: slots.reduce((x, y) => x + y.limit, 0),
-          message: d.msg.replace(/[<>]/g, '').trim().slice(0, 60), until: untilDate(d.until), at: new Date().toISOString(),
+          message: d.msg.replace(/[<>]/g, '').trim().slice(0, 60), until: untilAt(d.untilDay, d.untilHour), at: new Date().toISOString(),
+          codeMode: d.codeMode === 'shop' ? 'shop' : 'auto', shopCode: d.codeMode === 'shop' ? d.shopCode : '',
           status: 'live', by: AUTH.user.name, excess: Number(t.dataset.excess) || 0, basePrice: basePrice(ing, sid), reservations: [],
         });
       });
@@ -2030,9 +2116,43 @@ document.addEventListener('input', (e) => {
   if (el.dataset.row !== undefined) f.rows[Number(el.dataset.row)][el.dataset.k] = el.value;
   if (el.dataset.ai) { state.ai[el.dataset.ai] = el.value.trim(); save(); }
 });
+// 配信内容の入力中に、合計とプレビューだけを書きかえる
+function setDraftDiscount(v) { const n = Math.max(1, Math.min(90, Math.round(Number(v) || 1))); state.draft.discount = n / 100; }
+function draftLiveUpdate(from) {
+  const d = state.draft; if (!d) return;
+  const pct = Math.round(d.discount * 100);
+  const pr = $('#dr-price');
+  if (pr) {
+    const base = Number(pr.dataset.base), after = yen(Math.round(base * (1 - d.discount)));
+    pr.innerHTML = `${yen(base)} → <b>${after}</b>（1%ずつ変えられます）`;
+    const po = $('#dr-prev-off'), pp = $('#dr-prev-price');
+    if (po) po.textContent = `${pct}%オフ`;
+    if (pp) pp.textContent = `${yen(base)} → ${after}`;
+    if (from !== 'discount') { const rg = document.querySelector('[data-dr=discount]'); if (rg) rg.value = pct; }
+    if (from !== 'discount-num') { const nm = document.querySelector('[data-dr=discount-num]'); if (nm) nm.value = pct; }
+    document.querySelectorAll('[data-action=dr-discount]').forEach((b) => b.classList.toggle('is-on', Math.round(Number(b.dataset.v) * 100) === pct));
+  }
+  const tot = $('#dr-total');
+  if (tot) {
+    const qty = OFFER_HOURS.reduce((a, h) => a + (d.slots[h].on ? d.slots[h].limit : 0), 0), ex = Number(tot.dataset.excess);
+    tot.innerHTML = `合計 <b>${qty}</b>個 ${qty > ex ? '<span class="warn">（余りそうな数より多いです）</span>' : `<span class="muted">（余りそうな数 ${ex}${esc(tot.dataset.unit)}）</span>`}`;
+  }
+  const pm = $('#dr-prev-msg');
+  if (pm) { pm.textContent = d.msg.trim() ? `「${d.msg.trim()}」` : ''; pm.hidden = !d.msg.trim(); }
+}
 document.addEventListener('input', (e) => {
   const el = e.target;
-  if (el.dataset && el.dataset.dr === 'msg' && state.draft) state.draft.msg = el.value;
+  if (el.dataset && state.draft && (el.dataset.dr === 'discount' || el.dataset.dr === 'discount-num')) {
+    if (el.value !== '') { setDraftDiscount(el.value); draftLiveUpdate(el.dataset.dr); }
+    return;
+  }
+  if (el.dataset && el.dataset.dr && state.draft && ['msg', 'shopCode', 'slot-limit'].includes(el.dataset.dr)) {
+    const d = state.draft;
+    if (el.dataset.dr === 'msg') d.msg = el.value;
+    if (el.dataset.dr === 'shopCode') d.shopCode = el.value.replace(/\D/g, '').slice(0, 4);
+    if (el.dataset.dr === 'slot-limit') { const v = Math.round(Number(el.value)); if (v >= 1) d.slots[el.dataset.h].limit = Math.min(99, v); }
+    draftLiveUpdate();
+  }
   if (el.dataset && el.dataset.rc) state.receipt[el.dataset.rc] = el.value;
 });
 document.addEventListener('keydown', (e) => {
@@ -2041,13 +2161,41 @@ document.addEventListener('keydown', (e) => {
 
 document.addEventListener('change', (e) => {
   const el = e.target;
+  if (el.type === 'file' && (el.dataset.fPhoto !== undefined || el.dataset.photoFor)) {
+    const file = el.files && el.files[0];
+    const target = el.dataset.photoFor;
+    el.value = '';
+    if (!file) return;
+    readPhoto(file).then((data) => {
+      if (target) {
+        const old = USER_PHOTOS[target];
+        USER_PHOTOS[target] = data;
+        if (!saveUserPhotos()) { if (old) USER_PHOTOS[target] = old; else delete USER_PHOTOS[target]; state.photoMsg = '端末の保存容量がいっぱいで、写真を保存できませんでした。'; }
+        else state.photoMsg = '';
+        renderRecipes(); render();
+      } else { state.form.photo = data; state.form.status = ''; renderForm(); }
+    }).catch(() => {
+      if (target) { state.photoMsg = 'この写真は読み込めませんでした。JPEGやPNGの写真をえらんでください。'; render(); }
+      else { state.form.status = 'この写真は読み込めませんでした。JPEGやPNGの写真をえらんでください。'; renderForm(); }
+    });
+    return;
+  }
   if (el.dataset && el.dataset.dr && state.draft) {
     const d = state.draft, h = el.dataset.h;
     if (el.dataset.dr === 'slot-on') d.slots[h].on = el.checked;
     if (el.dataset.dr === 'slot-limit') d.slots[h].limit = Math.max(1, Math.min(99, Math.round(Number(el.value) || 1)));
-    if (el.dataset.dr === 'until') d.until = el.value;
+    if (el.dataset.dr === 'untilDay') {
+      d.untilDay = Number(el.value);
+      if (d.untilDay === 0 && d.untilHour <= new Date().getHours()) d.untilHour = Math.min(23, new Date().getHours() + 1);
+    }
+    if (el.dataset.dr === 'untilHour') d.untilHour = Number(el.value);
+    if (el.dataset.dr === 'discount' || el.dataset.dr === 'discount-num') { setDraftDiscount(el.value); draftLiveUpdate(); return; }
     if (el.dataset.dr === 'recipe') d.recipes[el.dataset.id] = el.checked;
     if (el.dataset.dr === 'msg') d.msg = el.value;
+    if (el.dataset.dr === 'codeMode') d.codeMode = el.value;
+    if (el.dataset.dr === 'shopCode') d.shopCode = el.value.replace(/\D/g, '').slice(0, 4);
+    // 文字・数の入力では描きなおさない（そのまま「配信する」を押せるように）
+    if (['msg', 'shopCode', 'slot-limit'].includes(el.dataset.dr)) { draftLiveUpdate(); return; }
     renderStore(); return;
   }
   if (el.dataset && el.dataset.acc) { state.acc[el.dataset.acc] = el.value; state.acc.locMsg = ''; renderAccount(); return; }
@@ -2099,4 +2247,5 @@ document.addEventListener('toggle', (e) => {
   if (e.target.id === 'opt-details') state.optOpen = e.target.open;
   if (e.target.id === 'lo-more') state.loMore = e.target.open;
   if (e.target.id === 'offer-details') state.offerOpen = e.target.open;
+  if (e.target.dataset && e.target.dataset.rsv) state.rsvOpen = e.target.open ? e.target.dataset.rsv : null;
 }, true);

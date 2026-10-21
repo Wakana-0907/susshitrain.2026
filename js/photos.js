@@ -47,7 +47,10 @@ const PHOTOS = {
 
 // 写真がないとき（自分で追加した献立・AIが追加した食材・読み込めないとき）は「NO IMAGE」を表示
 const NO_IMAGE = '<svg viewBox="0 0 24 24" width="40%" height="40%" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4.5 3.5 3 3-2.5L20 17"/></svg><span class="ph-noimg-t">NO IMAGE</span>';
+// 自分で登録した写真（献立の追加画面などから。端末の中だけに保存）は app.js で読み込む
+const USER_PHOTOS = {};
 function photoHtml(id, name, cls) {
+  if (USER_PHOTOS[id]) return `<span class="ph ${cls || ''} ph-user" aria-hidden="true"><img src="${USER_PHOTOS[id]}" alt=""></span>`;
   const p = PHOTOS[id];
   if (!p) return `<span class="ph ${cls || ''} ph-none" aria-hidden="true">${NO_IMAGE}</span>`;
   return `<span class="ph ${cls || ''}" aria-hidden="true"><img src="${p.url}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.add('ph-none');this.parentNode.innerHTML=NO_IMAGE"></span>`;
